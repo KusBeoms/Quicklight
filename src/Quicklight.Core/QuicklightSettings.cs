@@ -59,6 +59,9 @@ public sealed class QuicklightSettings
     /// <summary>GitHub repository ("owner/name") whose latest release "update" installs.</summary>
     public string UpdateRepository { get; set; } = "KusBeoms/Quicklight";
 
+    /// <summary>Check for a newer release shortly after start and every few hours; install it while the launcher is closed.</summary>
+    public bool AutoUpdate { get; set; } = true;
+
     /// <summary>Language models the server loads (and downloads on first start).</summary>
     public List<string> TranslationLanguages { get; set; } = ["ko", "en", "ja", "zh"];
 

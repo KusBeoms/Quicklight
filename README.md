@@ -6,14 +6,14 @@ Windows용 Spotlight 스타일 런처입니다. **Alt+Space** 를 누르면 화�
 |---|---|
 | 접두 기호 없이 최적의 결과 | 모든 공급자(앱, 파일, 설정, 명령, 계산기, URL, 경로, 웹 검색)를 한꺼번에 조회하고 하나의 점수 체계로 정렬. 고른 결과를 기억해서 같은 검색어나 그 앞부분을 다시 치면 위로 올림 |
 | Everything 색인으로 파일 검색 | SDK DLL 없이 Everything IPC(WM_COPYDATA)를 직접 구현. 빠른 이름 앞부분 검색 결과를 먼저 보여 주고 전체 검색 결과로 이어서 채움 |
-| Spotlight처럼 간결한 UI | 빈 상태에서는 알약 모양 검색창, 결과가 나오면 둥근 패널. 흐린 배경, "최상위 결과"와 종류별 구역, 열고 닫을 때 흐림에서 초점이 잡히는 애니메이션, 시스템 밝은/어두운 테마 |
+| Spotlight처럼 간결한 UI | 빈 상태에서는 알약 모양 검색창, 결과가 나오면 둥근 패널. 흐린 배경, "최상위 결과"와 종류별 구역, 열고 닫을 때 흐림에서 초점이 잡히는 애니메이션(모니터 주사율에 맞춰 120/144/240Hz로 재생), 시스템 밝은/어두운 테마 |
 | 모든 앱 보기 | `앱`, `app`, `apps`, `application`, `애플리케이션`, `응용프로그램`, `프로그램` 을 입력하면 설치된 앱 전체를 이름순 그리드로 표시 (A–Z, ㄱ–ㅎ, # 구역. 제거 프로그램과 도움말 링크는 뺌) |
 | 우클릭 메뉴 | 열기, 관리자 권한으로 실행, 파일 탐색기에서 열기, 경로 복사 |
 | 환전 | `100달러`, `$100`, `5만원 엔`, `100 usd to eur`, `100달러를 유로로`, `100달러는 몇 원?`. 대상을 안 쓰면 Windows 지역 설정의 통화(한국이면 원화)로, 이미 그 통화면 달러로 바꾸고 다른 주요 통화도 함께 보여 줌 |
 | 번역 | `hello 번역`, `번역 good morning`, `사과 영어로`, `영어로 오늘 날씨 좋다`, `good morning in korean`, `serendipity 뜻`. 이 PC에서 도는 LibreTranslate로 번역하므로 글이 밖으로 나가지 않음. 대상을 안 쓰면 한국어는 영어로, 그 밖의 언어는 한국어로 |
 | 답변 카드 | 계산, 환전, 번역 결과가 맨 위에 오면 큰 글씨 카드로 표시. Enter는 결과 복사 |
 | MCP 서버 | `Quicklight.exe --mcp` 로 AI가 같은 검색 엔진을 사용. 창을 띄우지 않고 런처 화면을 흉내 낸 마크다운으로 답함 |
-| 자동 업데이트 | `update` (또는 `업데이트`) 를 치고 Enter: GitHub 최신 릴리스를 받아 서명을 확인한 뒤 교체하고 다시 시작하며, 이전 파일은 새 버전이 지움 |
+| 자동 업데이트 | 시작 30초 뒤와 6시간마다 GitHub 최신 릴리스를 확인해, 새 버전이 있으면 받아 두었다가 검색창이 닫혀 있을 때 설치하고 다시 시작. `update` (또는 `업데이트`) 를 치면 바로 확인하고 새 버전이 있으면 곧장 설치. 서명을 확인하며, 이전 파일은 새 버전이 지움 |
 | 진행 표시줄 | 번역 엔진 설치, 언어 모델 다운로드, 업데이트 다운로드, 앱 목록과 Everything 파일 색인을 결과 아래 얇은 막대로 표시. 양을 알 수 있으면 백분율, 모르면 흐르는 막대 |
 | 설치할 것 없음 | exe 하나에 .NET 런타임과 Everything이 들어 있음. 번역 엔진은 처음 번역할 때 스스로 설치 |
 
@@ -58,7 +58,12 @@ powershell -ExecutionPolicy Bypass -File install.ps1   :: %LOCALAPPDATA%\Program
 
 ## 업데이트
 
-런처에 `update` 또는 `업데이트` 를 치면 GitHub `KusBeoms/Quicklight` 의 최신 릴리스를 확인해 행에 보여 줍니다. 예: "새 버전 v0.2.0 있음 · Enter로 내려받아 설치하고 다시 시작". 확인할 저장소는 설정의 `updateRepository` 로 바꿀 수 있습니다. 새 버전이 있을 때 Enter를 누르면 다음 순서로 진행됩니다.
+두 가지 방법으로 업데이트합니다. 확인할 저장소(기본 GitHub `KusBeoms/Quicklight`)는 설정의 `updateRepository` 로 바꿀 수 있습니다.
+
+- **자동**: Quicklight가 시작되고 30초 뒤, 그리고 6시간마다 최신 릴리스를 확인합니다. 새 버전이 있으면 내려받아 검증해 두고, 검색창이 닫혀 있을 때 설치하고 다시 시작합니다. 다시 시작하면 트레이 알림으로 알려 줍니다. 설정의 `autoUpdate: false` 로 끌 수 있습니다.
+- **수동**: 런처에 `update` 또는 `업데이트` 를 치면 곧바로 확인합니다. 새 버전이 있으면 Enter 없이 바로 설치를 시작하고, 없으면 "최신 버전입니다"라고 알려 줍니다. Enter를 누르면 다시 확인합니다.
+
+설치는 다음 순서로 진행됩니다.
 
 1. 릴리스의 `Quicklight_v0.2.0.zip` 같은 zip을 받습니다. 진행률이 결과 아래 막대로 표시되고, Esc로 취소할 수 있습니다.
 2. zip 안의 `Quicklight.exe` 가 **릴리스 키로 서명되었는지** `Quicklight.exe.sig` 로 확인합니다. 서명이 없거나 맞지 않으면 설치하지 않습니다. GitHub 계정이 탈취되어도 서명 키 없이는 업데이트를 퍼뜨릴 수 없습니다.
@@ -116,6 +121,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1   :: %LOCALAPPDATA%\Program
 | `launchAtStartup` | true | Windows 시작 시 실행 |
 | `theme` | `"system"` | `"dark"`, `"light"` |
 | `updateRepository` | `"KusBeoms/Quicklight"` | `update` 가 최신 릴리스를 찾는 GitHub 저장소 |
+| `autoUpdate` | true | 시작 뒤와 6시간마다 새 버전을 확인해, 검색창이 닫혀 있을 때 설치 |
 | `bundledEverything` | true | Everything이 없을 때 내장 Everything 설치를 제안 |
 | `everythingSetup` | `"ask"` | 내장 Everything 설치 제안에 대한 답 (`installed`, `declined`) |
 | `autoInstallTranslation` | true | 번역 엔진이 없으면 처음 번역할 때 자동 설치 |

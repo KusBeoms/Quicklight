@@ -23,10 +23,12 @@ public partial class MainWindow : Window
     const double ShadowMargin = 24;      // DIPs around the panel, room for the drop shadow (matches Shell.Margin)
     const double MaxPanelHeight = 580;   // DIPs; the bar sits so that a fully expanded panel is centered on screen
     const double ExpandedRadius = 24;    // corner radius with results; the bare search bar is a pill
-    const double BackdropPad = 48;       // px captured beyond the panel so the blur has no dark edges
+    const double BackdropPad = 48;       // DIPs captured beyond the panel so the blur near its edges has real content
+    const double BackdropBlur = 14;      // blur strength (Gaussian sigma) of the backdrop, in DIPs
 
     readonly SearchEngine _engine;
     readonly QuicklightSettings _settings;
+    readonly UpdateService _updates;
     readonly IconLoader _icons = new(64);
     readonly ObservableCollection<ResultItem> _items = [];
     readonly ObservableCollection<ResultItem> _apps = [];
@@ -40,16 +42,18 @@ public partial class MainWindow : Window
     string? _armedKey; // result waiting for the second Enter of a destructive command
     string _lastQuery = "";
     bool _hiding;
+    int _frameRate = 60; // refresh rate of the monitor the launcher is on; animations run at this rate
 
     public IntPtr Handle { get; private set; }
 
     /// <summary>Keep the window open when it loses focus (--pinned, for screenshots and debugging).</summary>
     public bool Pinned { get; set; }
 
-    public MainWindow(SearchEngine engine, QuicklightSettings settings)
+    public MainWindow(SearchEngine engine, QuicklightSettings settings, UpdateService updates)
     {
         _engine = engine;
         _settings = settings;
+        _updates = updates;
         InitializeComponent();
         ((CollectionViewSource)Resources["GroupedResults"]).Source = _items;
         ((CollectionViewSource)Resources["GroupedApps"]).Source = _apps;
@@ -95,7 +99,8 @@ public partial class MainWindow : Window
 
     public void ShowLauncher()
     {
-        var (work, scale) = NativeUi.MonitorUnderCursor();
+        var (work, scale, hz) = NativeUi.MonitorUnderCursor();
+        _frameRate = Math.Clamp(hz, 30, 500);
         int windowWidthPx = (int)(Width * scale);
         int x = work.Left + (work.Width - windowWidthPx) / 2;
         int panelTop = work.Top + Math.Max(0, (int)((work.Height - MaxPanelHeight * scale) / 2));
@@ -144,27 +149,51 @@ public partial class MainWindow : Window
         int pad = (int)(BackdropPad * scale);
         try
         {
-            Backdrop.Source = ScreenCapture.Capture(x - pad, y - pad, width + 2 * pad, height + 2 * pad, scale);
+            Backdrop.Source = ScreenCapture.CaptureBlurred(x - pad, y - pad, width + 2 * pad, height + 2 * pad, scale, BackdropBlur);
             Canvas.SetLeft(Backdrop, -pad / scale);
             Canvas.SetTop(Backdrop, -pad / scale);
         }
         catch (Exception ex) { Log.Error("backdrop capture failed", ex); }
     }
 
+    /// <summary>
+    /// An animation that ticks at the monitor's refresh rate. WPF animations default to 60 fps, which looks
+    /// choppy on 120/144/240 Hz screens.
+    /// </summary>
+    DoubleAnimation Anim(double? from, double to, double ms, IEasingFunction ease)
+    {
+        var a = new DoubleAnimation { To = to, Duration = TimeSpan.FromMilliseconds(ms), EasingFunction = ease };
+        if (from is { } f) a.From = f;
+        Timeline.SetDesiredFrameRate(a, _frameRate);
+        return a;
+    }
+
+    /// <summary>
+    /// While animating, the panel is drawn once into a GPU bitmap, so each frame only scales, fades and blurs that
+    /// bitmap instead of redrawing every row. Dropped afterwards so the settled panel is pixel-sharp.
+    /// </summary>
+    void CacheShell(bool on) => Shell.CacheMode = on ? new BitmapCache { SnapsToDevicePixels = true } : null;
+
     // Fade in while the whole panel comes into focus (blur → sharp) and settles from a slightly smaller scale.
     void AnimateIn()
     {
         _hiding = false;
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        var duration = TimeSpan.FromMilliseconds(230);
+        const double ms = 230;
+        CacheShell(true);
         var blur = new BlurEffect { Radius = 16, RenderingBias = RenderingBias.Performance };
         Shell.Effect = blur;
-        Shell.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(170)) { EasingFunction = ease });
-        ShellScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.97, 1, duration) { EasingFunction = ease });
-        ShellScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.97, 1, duration) { EasingFunction = ease });
-        var focus = new DoubleAnimation(16, 0, duration) { EasingFunction = ease };
-        // Drop the effect once sharp: an idle BlurEffect would still cost a render pass per frame.
-        focus.Completed += (_, _) => { if (Shell.Effect == blur) Shell.Effect = null; };
+        Shell.BeginAnimation(OpacityProperty, Anim(0, 1, 170, ease));
+        ShellScale.BeginAnimation(ScaleTransform.ScaleXProperty, Anim(0.97, 1, ms, ease));
+        ShellScale.BeginAnimation(ScaleTransform.ScaleYProperty, Anim(0.97, 1, ms, ease));
+        var focus = Anim(16, 0, ms, ease);
+        // Drop the effect and the cache once sharp: an idle BlurEffect would still cost a render pass per frame.
+        focus.Completed += (_, _) =>
+        {
+            if (Shell.Effect != blur) return; // hiding again already
+            Shell.Effect = null;
+            CacheShell(false);
+        };
         blur.BeginAnimation(BlurEffect.RadiusProperty, focus);
     }
 
@@ -173,13 +202,14 @@ public partial class MainWindow : Window
     {
         _hiding = true;
         var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
-        var duration = TimeSpan.FromMilliseconds(160);
+        const double ms = 160;
+        CacheShell(true);
         var blur = new BlurEffect { Radius = 0, RenderingBias = RenderingBias.Performance };
         Shell.Effect = blur;
-        blur.BeginAnimation(BlurEffect.RadiusProperty, new DoubleAnimation(0, 16, duration) { EasingFunction = ease });
-        ShellScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.97, duration) { EasingFunction = ease });
-        ShellScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.97, duration) { EasingFunction = ease });
-        var fade = new DoubleAnimation(0, duration) { EasingFunction = ease };
+        blur.BeginAnimation(BlurEffect.RadiusProperty, Anim(0, 16, ms, ease));
+        ShellScale.BeginAnimation(ScaleTransform.ScaleXProperty, Anim(null, 0.97, ms, ease));
+        ShellScale.BeginAnimation(ScaleTransform.ScaleYProperty, Anim(null, 0.97, ms, ease));
+        var fade = Anim(null, 0, ms, ease);
         fade.Completed += (_, _) =>
         {
             if (!_hiding) return; // shown again mid-animation
@@ -393,7 +423,8 @@ public partial class MainWindow : Window
                 if (Selected is { } item) Execute(item);
                 e.Handled = true; break;
             case Key.Escape:
-                if (_armedKey is not null) Disarm();
+                if (_updateBusy && _updateCts is { IsCancellationRequested: false } updating) updating.Cancel(); // "Esc로 취소"
+                else if (_armedKey is not null) Disarm();
                 else if (Query.Text.Length > 0) Query.Clear();
                 else HideLauncher();
                 e.Handled = true; break;
@@ -544,7 +575,6 @@ public partial class MainWindow : Window
         return false;
     }
 
-    ReleaseInfo? _availableUpdate;
     string? _updateStatus;
     DateTime _updateCheckedUtc = DateTime.MinValue;
     CancellationTokenSource? _updateCts;
@@ -558,27 +588,28 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Runs when the "update" row appears: asks GitHub for the latest release so the row says what Enter will do
-    /// ("v0.2.0 있음 · Enter로 설치" or "최신 버전입니다").
+    /// Runs when the "update" row appears, i.e. "update" / "업데이트" was typed: asks GitHub right away and, when
+    /// there is a newer release, downloads and installs it without waiting for Enter.
     /// </summary>
     async Task CheckForUpdateAsync()
     {
-        if (_updateBusy || DateTime.UtcNow - _updateCheckedUtc < TimeSpan.FromMinutes(5)) return;
+        // Each search stage re-renders the row; one check per command is enough.
+        if (_updateBusy || DateTime.UtcNow - _updateCheckedUtc < TimeSpan.FromSeconds(15)) return;
         _updateBusy = true;
         _updateCts?.Dispose();
         _updateCts = new CancellationTokenSource();
+        bool install = false;
         try
         {
             SetUpdateStatus("GitHub에서 최신 버전을 확인하는 중…");
-            using var updater = new Updater(_settings.UpdateRepository);
-            var latest = await updater.GetLatestAsync(_updateCts.Token);
+            var latest = await _updates.CheckAsync(_updateCts.Token);
             var current = Updater.CurrentVersion.ToString(3);
             _updateCheckedUtc = DateTime.UtcNow;
-            _availableUpdate = latest is not null && latest.Version > Updater.CurrentVersion ? latest : null;
+            install = _updates.Available is not null;
             SetUpdateStatus(latest is null
                 ? $"GitHub({_settings.UpdateRepository})에 Quicklight_v버전.zip이 든 릴리스가 없습니다 (지금 v{current})"
-                : _availableUpdate is not null
-                    ? $"새 버전 v{latest.Version.ToString(3)} 있음 (지금 v{current})   ·   Enter로 내려받아 설치하고 다시 시작"
+                : install
+                    ? $"새 버전 v{latest.Version.ToString(3)} 있음 (지금 v{current})   ·   설치를 시작합니다"
                     : $"최신 버전입니다 (v{current})");
         }
         catch (OperationCanceledException)
@@ -591,32 +622,25 @@ public partial class MainWindow : Window
             SetUpdateStatus("업데이트를 확인하지 못했습니다: " + ex.Message);
         }
         finally { _updateBusy = false; }
+        if (install) await RunUpdateAsync();
     }
 
-    /// <summary>Enter on the update row: installs the release found by the check (or checks first when there is none yet).</summary>
+    /// <summary>Downloads (or reuses the background download of) the newer release, then restarts into it.</summary>
     async Task RunUpdateAsync()
     {
         if (_updateBusy) return;
-        if (_availableUpdate is not { } release) { _updateCheckedUtc = DateTime.MinValue; await CheckForUpdateAsync(); return; }
+        if (_updates.Available is not { } release) { _updateCheckedUtc = DateTime.MinValue; await CheckForUpdateAsync(); return; }
         _updateBusy = true;
         _updateCts?.Dispose();
         _updateCts = new CancellationTokenSource();
         try
         {
-            var exe = Environment.ProcessPath ?? throw new UpdateException("Cannot tell where Quicklight is installed.");
-            using var updater = new Updater(_settings.UpdateRepository);
-            var title = $"Quicklight v{release.Version.ToString(3)} 내려받는 중";
-            using var activity = ActivityTracker.Shared.Begin("update", title, 0, "Esc로 취소");
-            var progress = new Progress<double>(p =>
-            {
-                SetUpdateStatus($"v{release.Version.ToString(3)} 내려받는 중… {p:P0}   ·   Esc로 취소");
-                activity.Report(title, p, "Esc로 취소");
-            });
-            var downloaded = await updater.DownloadAsync(release, exe, Updater.CurrentVersion, progress, _updateCts.Token);
-            SetUpdateStatus($"v{release.Version.ToString(3)}(으)로 다시 시작합니다…");
+            var version = release.Version.ToString(3);
+            var progress = new Progress<double>(p => SetUpdateStatus($"v{version} 내려받는 중… {p:P0}   ·   Esc로 취소"));
+            var downloaded = await _updates.DownloadAsync(release, progress, "Esc로 취소", _updateCts.Token);
+            SetUpdateStatus($"v{version}(으)로 다시 시작합니다…");
             await Task.Delay(400, _updateCts.Token); // Esc in this moment still cancels
-            Updater.ApplyAndRestart(downloaded, exe);
-            ((App)Application.Current).ShutdownForUpdate();
+            _updates.Install(downloaded);
         }
         catch (OperationCanceledException)
         {
@@ -630,7 +654,6 @@ public partial class MainWindow : Window
         }
         finally { _updateBusy = false; }
     }
-
     const string ArmedText = "한 번 더 Enter를 누르면 실행합니다 · Esc로 취소";
 
     void Disarm()
@@ -650,7 +673,7 @@ public partial class MainWindow : Window
             return;
         }
         if (r.Action == ActionType.None) { FooterText.Text = "Esc  닫기"; return; }
-        if (r.Action == ActionType.Update) { FooterText.Text = "↵  업데이트 확인 및 설치      Esc  닫기"; return; }
+        if (r.Action == ActionType.Update) { FooterText.Text = "↵  다시 확인      Esc  취소 / 닫기"; return; }
         string enter = r.Action switch
         {
             ActionType.Copy => "결과 복사",

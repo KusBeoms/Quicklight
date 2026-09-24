@@ -18,6 +18,7 @@ public partial class App : Application
     HotkeyManager? _hotkey;
     TrayIcon? _tray;
     QuicklightSettings _settings = new();
+    UpdateService? _updates;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -51,7 +52,8 @@ public partial class App : Application
         _engine = SearchEngine.CreateDefault(_settings, _usage);
         _ = _engine.WarmUpAsync();
 
-        _window = new MainWindow(_engine, _settings) { Pinned = e.Args.Contains("--pinned") };
+        _updates = new UpdateService(_settings);
+        _window = new MainWindow(_engine, _settings, _updates) { Pinned = e.Args.Contains("--pinned") };
         _window.InitializeHidden();
 
         _hotkey = new HotkeyManager(_window.Handle, () => _window.Toggle());
@@ -88,6 +90,7 @@ public partial class App : Application
         if (updatedFrom is not null) _tray.Notify("Quicklight", $"v{Updater.CurrentVersion.ToString(3)}(으)로 업데이트했습니다.");
 
         _ = SetUpEverythingAsync(userAsked: false);
+        _ = _updates.RunBackgroundAsync(launcherOpen: () => _window.IsVisible);
     }
 
     static string? ArgAfter(string[] args, string name)

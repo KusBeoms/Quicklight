@@ -241,13 +241,10 @@
 
         <Grid x:Name="Panel" SizeChanged="Panel_SizeChanged">
             <!-- A blurred snapshot of the screen behind the window: acrylic that works with any corner radius.
+                 Blurred once when captured (no live effect, so animation frames stay cheap), drawn scaled up.
                  On a Canvas so the (larger) snapshot never takes part in sizing the panel. -->
             <Canvas IsHitTestVisible="False">
-                <Image x:Name="Backdrop" Stretch="None">
-                    <Image.Effect>
-                        <BlurEffect Radius="40" KernelType="Gaussian" RenderingBias="Performance" />
-                    </Image.Effect>
-                </Image>
+                <Image x:Name="Backdrop" Stretch="None" RenderOptions.BitmapScalingMode="Linear" />
             </Canvas>
             <Border x:Name="Tint" Background="{DynamicResource PanelBrush}" />
 
