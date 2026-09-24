@@ -29,6 +29,9 @@ public sealed class SearchEngine : IDisposable
     /// <summary>Target for text already in the system language (English by default).</summary>
     public string SecondaryLanguage => string.IsNullOrWhiteSpace(_settings.SecondaryLanguage) ? "en" : _settings.SecondaryLanguage.Trim().ToLowerInvariant();
 
+    /// <summary>Languages the translation server loads.</summary>
+    public IReadOnlyCollection<string> TranslationLanguages => _settings.TranslationLanguages is { Count: > 0 } l ? l : LibreTranslateClient.DefaultModels;
+
     /// <summary>Local translation server; null when translation is not wired in.</summary>
     public ITranslator? Translator { get; }
 
@@ -39,8 +42,9 @@ public sealed class SearchEngine : IDisposable
     {
         var s = (setting ?? "").Trim().ToUpperInvariant();
         if (s.Length == 3 && s != "AUTO") return s;
-        try { return new System.Globalization.RegionInfo(System.Globalization.CultureInfo.CurrentCulture.Name).ISOCurrencySymbol; }
-        catch (ArgumentException) { return "USD"; } // invariant or neutral culture
+        // The Windows region (Settings > Time & language > Region), not the number-format culture.
+        try { return System.Globalization.RegionInfo.CurrentRegion.ISOCurrencySymbol; }
+        catch (ArgumentException) { return "USD"; }
     }
 
     public SearchEngine(QuicklightSettings settings, UsageStore usage, AppProvider? apps = null, EverythingClient? everything = null,
@@ -61,6 +65,7 @@ public sealed class SearchEngine : IDisposable
             Apps,
             new SystemProvider(),
             new WebSearchProvider(settings),
+            new UpdateProvider(settings),
         ];
         if (everything is not null) _providers.Add(new EverythingProvider(everything, settings));
         Rates = rates;
@@ -80,8 +85,10 @@ public sealed class SearchEngine : IDisposable
         if (!settings.Translation) return null;
         try
         {
-            return new LibreTranslateClient(settings.LibreTranslateUrl, LibreTranslateClient.FindServerDir(settings.LibreTranslateDir),
-                settings.TranslationLanguages is { Count: > 0 } l ? l : null);
+            // With nothing installed, the engine installs itself on the first translation (autoInstallTranslation).
+            var installer = settings.AutoInstallTranslation ? new TranslationInstaller() : null;
+            return new LibreTranslateClient(settings.LibreTranslateUrl, LibreTranslateClient.FindServerExe(settings.LibreTranslateDir, installer),
+                settings.TranslationLanguages is { Count: > 0 } l ? l : null, installer: installer);
         }
         catch (Exception ex) when (ex is ArgumentException or UriFormatException)
         {
@@ -194,6 +201,8 @@ public sealed class SearchEngine : IDisposable
                 throw new InvalidOperationException("Copy results are handled by the caller.");
             case ActionType.None:
                 break;
+            case ActionType.Update:
+                throw new InvalidOperationException("Updates are handled by the launcher.");
         }
     }
 

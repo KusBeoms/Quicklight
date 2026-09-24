@@ -17,7 +17,10 @@ public class TranslationTests
     [InlineData("translate: bonjour", "bonjour", null)]
     [InlineData("사과 영어로", "사과", "en")]
     [InlineData("사과를 영어로 번역해줘", "사과", "en")]
-    [InlineData("영어로 오늘 날씨 좋다", "오늘 날씨 좋다", "en")]
+    [InlineData("영어로 번역 오늘 날씨 좋다", "오늘 날씨 좋다", "en")]
+    [InlineData("사과는 영어로", "사과", "en")]
+    [InlineData("사과 영어로 뭐야?", "사과", "en")]
+    [InlineData("serendipity의 뜻", "serendipity", null)]
     [InlineData("good morning in korean", "good morning", "ko")]
     [InlineData("translate thank you to japanese", "thank you", "ja")]
     [InlineData("감사합니다 일본어로", "감사합니다", "ja")]
@@ -40,6 +43,12 @@ public class TranslationTests
     [InlineData("100달러")]
     [InlineData("번역가 모집")]
     [InlineData("서울로 가는 길")]
+    [InlineData("change language to korean")]
+    [InlineData("go to english")]
+    [InlineData("한국어로 설정")]
+    [InlineData("한글로 문서 만들기")]
+    [InlineData("삶의 의미")]
+    [InlineData("영어로 번역")]
     public void Ignores(string query) => Assert.Null(TranslationParser.Parse(query));
 
     [Theory]
@@ -50,6 +59,33 @@ public class TranslationTests
     [InlineData("안녕", "en", "en", "en")]
     public void Default_target(string text, string system, string secondary, string expected) =>
         Assert.Equal(expected, TranslationParser.DefaultTarget(text, system, secondary));
+
+    [Fact]
+    public void System_language_without_a_model_falls_back()
+    {
+        string[] models = ["ko", "en", "ja", "zh"];
+        Assert.Equal("en", TranslationParser.DefaultTarget("Guten Morgen", "de", "en", models)); // no German model
+        Assert.Equal("ko", TranslationParser.Fallback("en", "en", models));                    // English text on an English system
+        Assert.Equal("en", TranslationParser.Fallback("ko", "en", models));
+    }
+
+    [Fact]
+    public async Task Text_already_in_the_target_is_translated_to_the_fallback()
+    {
+        var t = new FakeTranslator { DetectAs = "ko" }; // "detects" Korean, and the default target is ko
+        var r = await Engine(t).SearchAsync("bonjour 번역", files: FileStage.Full);
+        Assert.Equal("[en] bonjour", r[0].Title);
+        Assert.Equal(2, t.Calls);
+    }
+
+    [Fact]
+    public async Task Server_timeouts_become_a_row_and_keep_other_results()
+    {
+        var t = new FakeTranslator { Throw = new TaskCanceledException("timeout") };
+        var r = await Engine(t).SearchAsync("hello 번역", files: FileStage.Full);
+        Assert.Contains(r, x => x.Kind == ResultKind.Translation && x.Action == ActionType.None && x.Title.Contains("오래"));
+        Assert.Equal(ResultKind.WebSearch, r[^1].Kind); // the stage still completed
+    }
 
     [Fact]
     public void Script_guess()
@@ -78,7 +114,7 @@ public class TranslationTests
     [InlineData("http://127.0.0.1:5055", true)]
     [InlineData("http://localhost:5055", true)]
     [InlineData("http://[::1]:5055", true)]
-    [InlineData("http://loopback:5055", false)]        // resolved by name, possibly on another machine
+    [InlineData("http://loopback:5055", true)]         // .NET rewrites "loopback" to "localhost" before connecting
     [InlineData("http://127.0.0.1.evil.com", false)]
     [InlineData("http://localhost@evil.com", false)]
     [InlineData("http://user@localhost:5055", false)]
@@ -159,6 +195,7 @@ public class TranslationTests
         public bool Ready = true;
         public bool CanStart = true;
         public bool IsReady => Ready;
+        public string? Status => Ready ? null : "번역 엔진을 준비하는 중…";
 
         public Task<bool> EnsureReadyAsync(TimeSpan timeout, CancellationToken ct)
         {
@@ -166,10 +203,14 @@ public class TranslationTests
             return Task.FromResult(Ready);
         }
 
+        public string? DetectAs;
+        public Exception? Throw;
+
         public Task<TranslationResult> TranslateAsync(string text, string target, CancellationToken ct)
         {
             Interlocked.Increment(ref Calls);
-            return Task.FromResult(new TranslationResult($"[{target}] {text}", "en", target, 90, [$"alt: {text}"]));
+            if (Throw is not null) return Task.FromException<TranslationResult>(Throw);
+            return Task.FromResult(new TranslationResult($"[{target}] {text}", DetectAs ?? "en", target, 90, [$"alt: {text}"]));
         }
     }
 }
@@ -198,6 +239,15 @@ public class MarkdownTests
         Assert.Contains(@"`C:\a'b\my*file_[1]`", md); // backticks cannot be escaped inside code spans
     }
 
+    [Theory]
+    [InlineData("- item", @"\- item")]
+    [InlineData("1. first", @"1\. first")]
+    [InlineData("a & b", @"a \& b")]
+    [InlineData("  - item", @"  \- item")]
+    [InlineData("a	b", "a	b")]
+    [InlineData("👨‍👩", "👨‍👩")]
+    public void Line_start_markers_and_entities_are_escaped(string text, string expected) => Assert.Equal(expected, McpMarkdown.Escape(text));
+
     [Fact]
     public void Invisible_characters_are_dropped()
     {
@@ -217,7 +267,7 @@ public class RegionCurrencyTests
     [Fact]
     public void Auto_uses_the_windows_region()
     {
-        var region = new System.Globalization.RegionInfo(System.Globalization.CultureInfo.CurrentCulture.Name).ISOCurrencySymbol;
+        var region = System.Globalization.RegionInfo.CurrentRegion.ISOCurrencySymbol;
         Assert.Equal(region, SearchEngine.ResolveDefaultCurrency("auto"));
         Assert.Equal(region, SearchEngine.ResolveDefaultCurrency(""));
         Assert.Equal(region, SearchEngine.ResolveDefaultCurrency(null));

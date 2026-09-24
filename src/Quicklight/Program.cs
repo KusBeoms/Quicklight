@@ -10,6 +10,8 @@ public static class Program
     {
         // MCP clients start us with redirected stdin/stdout; a GUI-subsystem exe still inherits those handles.
         if (args.Contains("--mcp")) return McpHost.RunAsync(args).GetAwaiter().GetResult();
+        // The one elevated step of the bundled Everything setup (started through UAC by the launcher).
+        if (args.Contains("--install-everything")) return Quicklight.Core.Everything.EverythingBootstrap.InstallElevated();
 
         var app = new App();
         app.InitializeComponent();

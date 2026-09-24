@@ -128,14 +128,25 @@ public static class McpMarkdown
         {
             if (c is '\r' or '\n') { sb.Append(' '); continue; }
             if (IsInvisible(c)) continue;
-            if (c is '\\' or '`' or '*' or '_' or '[' or ']' or '<' or '>' or '#' or '|' or '~') sb.Append('\\');
+            if (c is '\\' or '`' or '*' or '_' or '[' or ']' or '<' or '>' or '#' or '|' or '~' or '&') sb.Append('\\');
             sb.Append(c);
         }
-        return sb.ToString();
+        // Text at the start of a line must not turn into a list or a heading underline: "- x", "1. x", "= x".
+        var result = sb.ToString();
+        int start = result.Length - result.TrimStart(' ', '	').Length; // markers after leading spaces count too
+        var rest = result[start..];
+        if (rest.Length > 0 && (rest[0] is '-' or '+' or '=' || System.Text.RegularExpressions.Regex.IsMatch(rest, @"^\d+[.)]")))
+        {
+            int i = start + (rest[0] is '-' or '+' or '=' ? 0 : rest.IndexOfAny(['.', ')']));
+            result = result.Insert(i, "\\");
+        }
+        return result;
     }
 
     /// <summary>Bidi overrides and zero-width characters can disguise a name ("gpj.exe" shown as "exe.jpg"); they are dropped.</summary>
     static bool IsInvisible(char c) =>
+        // Tabs and the zero-width joiners (emoji sequences, Indic and Persian text) are real content; keep them.
+        c is not ('	' or '‌' or '‍') &&
         char.GetUnicodeCategory(c) is System.Globalization.UnicodeCategory.Format or System.Globalization.UnicodeCategory.Control;
 
     static string Cell(string s) => Escape(s);

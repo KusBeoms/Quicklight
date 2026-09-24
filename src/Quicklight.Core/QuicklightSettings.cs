@@ -47,6 +47,18 @@ public sealed class QuicklightSettings
     /// <summary>LibreTranslate checkout with a .venv, started on demand. Empty = find ".library\LibreTranslate" near the exe.</summary>
     public string LibreTranslateDir { get; set; } = "";
 
+    /// <summary>With no LibreTranslate found, download and install one on the first translation (about 1 GB with models).</summary>
+    public bool AutoInstallTranslation { get; set; } = true;
+
+    /// <summary>File search: use Quicklight's bundled Everything when none is installed (installs its service once, with consent).</summary>
+    public bool BundledEverything { get; set; } = true;
+
+    /// <summary>"ask" until the user answered the one-time Everything setup prompt, then "installed" or "declined".</summary>
+    public string EverythingSetup { get; set; } = "ask";
+
+    /// <summary>GitHub repository ("owner/name") whose latest release "update" installs.</summary>
+    public string UpdateRepository { get; set; } = "KusBeoms/Quicklight";
+
     /// <summary>Language models the server loads (and downloads on first start).</summary>
     public List<string> TranslationLanguages { get; set; } = ["ko", "en", "ja", "zh"];
 

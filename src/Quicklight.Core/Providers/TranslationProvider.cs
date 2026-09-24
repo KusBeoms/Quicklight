@@ -22,23 +22,32 @@ public sealed class TranslationProvider(ITranslator translator, QuicklightSettin
         if (!settings.Translation || query.IsAlternate || TranslationParser.Parse(query.Text) is not { } req) return [];
         var system = Languages.System;
         var secondary = string.IsNullOrWhiteSpace(settings.SecondaryLanguage) ? "en" : settings.SecondaryLanguage.Trim().ToLowerInvariant();
-        var target = req.Target ?? TranslationParser.DefaultTarget(req.Text, system, secondary);
+        IReadOnlyCollection<string> models = settings.TranslationLanguages is { Count: > 0 } l ? l : LibreTranslateClient.DefaultModels;
+        var target = req.Target ?? TranslationParser.DefaultTarget(req.Text, system, secondary, models);
 
         TranslationResult? cached;
         lock (_gate) _cache.TryGetValue((req.Text, target), out cached);
         if (cached is not null) return Rows(cached);
         if (query.Files == FileStage.None) return [Pending(req, target, "번역 중…")];
 
-        // The prefix pass does not wait for a cold server; the full pass does (the launcher shows "starting" meanwhile).
-        var wait = query.Files == FileStage.Full ? TimeSpan.FromSeconds(45) : TimeSpan.Zero;
+        // Never hold the other results back for long: a cold server shows a "preparing" row, and the launcher
+        // searches again once the server is up.
+        var wait = query.Files == FileStage.Full ? TimeSpan.FromSeconds(3) : TimeSpan.Zero;
         if (!translator.IsReady && !await translator.EnsureReadyAsync(wait, ct).ConfigureAwait(false))
-            return [Pending(req, target, "번역 엔진을 준비하는 중… 처음에는 언어 모델을 내려받느라 몇 분 걸릴 수 있습니다")];
+            return [Pending(req, target, translator.Status ?? "번역 엔진을 준비하는 중…")];
 
         try
         {
             var result = await translator.TranslateAsync(req.Text, target, ct).ConfigureAwait(false);
+            // Detected as the target already ("hello 번역" on an English system): go to the fallback language instead.
+            if (req.Target is null && result.Source == target)
+                result = await translator.TranslateAsync(req.Text, TranslationParser.Fallback(target, secondary, models), ct).ConfigureAwait(false);
             Remember((req.Text, target), result);
             return Rows(result);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return [Pending(req, target, "번역이 너무 오래 걸립니다. 잠시 뒤 다시 시도하세요")]; // HttpClient timeout
         }
         catch (Exception ex) when (ex is TranslationException or HttpRequestException)
         {
@@ -84,6 +93,7 @@ public sealed class TranslationProvider(ITranslator translator, QuicklightSettin
         Kind = ResultKind.Translation,
         Target = req.Text,
         Action = ActionType.None,
-        Score = Scores.Translation,
+        // Below apps and settings: an informational row must not take Enter away from a real result.
+        Score = Scores.TranslationPending,
     };
 }

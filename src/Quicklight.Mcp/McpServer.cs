@@ -248,7 +248,7 @@ public sealed class McpServer(SearchEngine engine, EverythingClient? everything,
         if (engine.Translator is null) throw new ToolException("Translation is turned off in Quicklight settings.");
         string target;
         if (toText is null)
-            target = Quicklight.Core.Translation.TranslationParser.DefaultTarget(text, Quicklight.Core.Translation.Languages.System, engine.SecondaryLanguage);
+            target = Quicklight.Core.Translation.TranslationParser.DefaultTarget(text, Quicklight.Core.Translation.Languages.System, engine.SecondaryLanguage, engine.TranslationLanguages);
         else
             target = Quicklight.Core.Translation.Languages.CodeFor(toText)
                      ?? (toText.Length is 2 or 3 && toText.All(char.IsAsciiLetter) ? toText.ToLowerInvariant() : throw new ToolException($"Unknown language '{toText}'."));
@@ -257,7 +257,13 @@ public sealed class McpServer(SearchEngine engine, EverythingClient? everything,
         if (!await engine.Translator.EnsureReadyAsync(TimeSpan.FromSeconds(90), ct))
             throw new ToolException("The local LibreTranslate server is not available (see %LOCALAPPDATA%\\Quicklight\\libretranslate.log).");
         Quicklight.Core.Translation.TranslationResult r;
-        try { r = await engine.Translator.TranslateAsync(text, target, ct); }
+        try
+        {
+            r = await engine.Translator.TranslateAsync(text, target, ct);
+            if (toText is null && r.Source == target)
+                r = await engine.Translator.TranslateAsync(text, Quicklight.Core.Translation.TranslationParser.Fallback(target, engine.SecondaryLanguage, engine.TranslationLanguages), ct);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { throw new ToolException("Translation timed out."); }
         catch (Exception ex) when (ex is Quicklight.Core.Translation.TranslationException or HttpRequestException) { throw new ToolException("Translation failed: " + ex.Message); }
         return ToolResult(new JsonObject
         {

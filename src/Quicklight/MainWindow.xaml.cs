@@ -12,6 +12,7 @@ using Quicklight.Core.Everything;
 using Quicklight.Core.Models;
 using Quicklight.Core.Providers;
 using Quicklight.Core.Shell;
+using Quicklight.Core.Update;
 
 namespace Quicklight;
 
@@ -116,6 +117,7 @@ public partial class MainWindow : Window
     public void HideLauncher()
     {
         if (!IsVisible || _hiding) return;
+        _updateCts?.Cancel(); // closing the launcher cancels an update check or download
         _cts?.Cancel(); // no point finishing Everything queries nobody will see
         Disarm();
         if (ActiveList.ContextMenu is { IsOpen: true } menu) menu.IsOpen = false;
@@ -227,11 +229,21 @@ public partial class MainWindow : Window
             if (_lastQuery.Length < 2 || (!_settings.FileSearch && !_settings.Translation)) return;
 
             await Task.Delay(60, token); // debounce the Everything round-trips while typing
+            IReadOnlyList<SearchResult> results = fast;
             foreach (var stage in new[] { FileStage.Prefix, FileStage.Full })
             {
-                var results = await _engine.SearchAsync(text, ct: token, files: stage);
+                results = await _engine.SearchAsync(text, ct: token, files: stage);
                 if (token.IsCancellationRequested) return;
                 Render(results, keepSelection: true);
+            }
+
+            // Translation server still starting (first run downloads models): wait for it, then search once more.
+            if (results.Any(r => r.Kind == ResultKind.Translation && r.Action == ActionType.None) &&
+                _engine.Translator is { IsReady: false } translator &&
+                await translator.EnsureReadyAsync(TimeSpan.FromMinutes(20), token) && !token.IsCancellationRequested)
+            {
+                results = await _engine.SearchAsync(text, ct: token, files: FileStage.Full);
+                if (!token.IsCancellationRequested) Render(results, keepSelection: true);
             }
         }
         catch (OperationCanceledException) { }
@@ -255,11 +267,14 @@ public partial class MainWindow : Window
         {
             _items.Add(item);
             if (item.Result.Key == _armedKey) item.SetSubtitleOverride(ArmedText);
+            if (item.Result.Action == ActionType.Update && _updateStatus is not null) item.SetSubtitleOverride(_updateStatus);
             LoadIcon(item, generation);
         }
 
         // The armed command dropped out of the list: forget it, so it can never run on a single Enter later.
         if (_armedKey is not null && !ordered.Exists(i => i.Result.Key == _armedKey)) _armedKey = null;
+
+        if (ordered.Exists(i => i.Result.Action == ActionType.Update)) _ = CheckForUpdateAsync();
 
         bool any = _items.Count > 0;
         Separator.Visibility = Results.Visibility = Footer.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
@@ -443,6 +458,7 @@ public partial class MainWindow : Window
     {
         var r = item.Result;
         if (r.Action == ActionType.None) return; // informational row ("translating…")
+        if (r.Action == ActionType.Update) { _ = RunUpdateAsync(); return; }
         if (r.RequiresConfirmation && _armedKey != r.Key)
         {
             Disarm();
@@ -504,6 +520,87 @@ public partial class MainWindow : Window
         return false;
     }
 
+    ReleaseInfo? _availableUpdate;
+    string? _updateStatus;
+    DateTime _updateCheckedUtc = DateTime.MinValue;
+    CancellationTokenSource? _updateCts;
+    bool _updateBusy;
+
+    /// <summary>Shows update progress on the "update" row, including rows recreated by later search stages.</summary>
+    void SetUpdateStatus(string text)
+    {
+        _updateStatus = text;
+        foreach (var i in _items) if (i.Result.Action == ActionType.Update) i.SetSubtitleOverride(text);
+    }
+
+    /// <summary>
+    /// Runs when the "update" row appears: asks GitHub for the latest release so the row says what Enter will do
+    /// ("v0.2.0 있음 · Enter로 설치" or "최신 버전입니다").
+    /// </summary>
+    async Task CheckForUpdateAsync()
+    {
+        if (_updateBusy || DateTime.UtcNow - _updateCheckedUtc < TimeSpan.FromMinutes(5)) return;
+        _updateBusy = true;
+        _updateCts?.Dispose();
+        _updateCts = new CancellationTokenSource();
+        try
+        {
+            SetUpdateStatus("GitHub에서 최신 버전을 확인하는 중…");
+            using var updater = new Updater(_settings.UpdateRepository);
+            var latest = await updater.GetLatestAsync(_updateCts.Token);
+            var current = Updater.CurrentVersion.ToString(3);
+            _updateCheckedUtc = DateTime.UtcNow;
+            _availableUpdate = latest is not null && latest.Version > Updater.CurrentVersion ? latest : null;
+            SetUpdateStatus(latest is null
+                ? $"GitHub({_settings.UpdateRepository})에 Quicklight_v버전.zip이 든 릴리스가 없습니다 (지금 v{current})"
+                : _availableUpdate is not null
+                    ? $"새 버전 v{latest.Version.ToString(3)} 있음 (지금 v{current})   ·   Enter로 내려받아 설치하고 다시 시작"
+                    : $"최신 버전입니다 (v{current})");
+        }
+        catch (OperationCanceledException)
+        {
+            SetUpdateStatus(_updateCts?.IsCancellationRequested == true ? "확인을 취소했습니다" : "GitHub 응답이 너무 늦습니다. 잠시 뒤 다시 시도하세요");
+        }
+        catch (Exception ex) when (ex is UpdateException or System.Net.Http.HttpRequestException or System.Text.Json.JsonException)
+        {
+            Log.Error("update check failed", ex);
+            SetUpdateStatus("업데이트를 확인하지 못했습니다: " + ex.Message);
+        }
+        finally { _updateBusy = false; }
+    }
+
+    /// <summary>Enter on the update row: installs the release found by the check (or checks first when there is none yet).</summary>
+    async Task RunUpdateAsync()
+    {
+        if (_updateBusy) return;
+        if (_availableUpdate is not { } release) { _updateCheckedUtc = DateTime.MinValue; await CheckForUpdateAsync(); return; }
+        _updateBusy = true;
+        _updateCts?.Dispose();
+        _updateCts = new CancellationTokenSource();
+        try
+        {
+            var exe = Environment.ProcessPath ?? throw new UpdateException("Cannot tell where Quicklight is installed.");
+            using var updater = new Updater(_settings.UpdateRepository);
+            var progress = new Progress<double>(p => SetUpdateStatus($"v{release.Version.ToString(3)} 내려받는 중… {p:P0}   ·   Esc로 취소"));
+            var downloaded = await updater.DownloadAsync(release, exe, Updater.CurrentVersion, progress, _updateCts.Token);
+            SetUpdateStatus($"v{release.Version.ToString(3)}(으)로 다시 시작합니다…");
+            await Task.Delay(400, _updateCts.Token); // Esc in this moment still cancels
+            Updater.ApplyAndRestart(downloaded, exe);
+            ((App)Application.Current).ShutdownForUpdate();
+        }
+        catch (OperationCanceledException)
+        {
+            SetUpdateStatus(_updateCts?.IsCancellationRequested == true ? "업데이트를 취소했습니다" : "GitHub 응답이 너무 늦어 업데이트하지 못했습니다");
+        }
+        catch (Exception ex) when (ex is UpdateException or System.Net.Http.HttpRequestException or IOException or UnauthorizedAccessException
+                                       or System.ComponentModel.Win32Exception)
+        {
+            Log.Error("update failed", ex);
+            SetUpdateStatus("업데이트하지 못했습니다: " + ex.Message);
+        }
+        finally { _updateBusy = false; }
+    }
+
     const string ArmedText = "한 번 더 Enter를 누르면 실행합니다 · Esc로 취소";
 
     void Disarm()
@@ -523,6 +620,7 @@ public partial class MainWindow : Window
             return;
         }
         if (r.Action == ActionType.None) { FooterText.Text = "Esc  닫기"; return; }
+        if (r.Action == ActionType.Update) { FooterText.Text = "↵  업데이트 확인 및 설치      Esc  닫기"; return; }
         string enter = r.Action switch
         {
             ActionType.Copy => "결과 복사",

@@ -26,6 +26,7 @@ public static class Scores
 {
     public const double Calculator = 1000;
     public const double Translation = 980;
+    public const double TranslationPending = 60;
     public const double Currency = 950;
     public const double ExactPath = 900;
     public const double PathCompletion = 850;

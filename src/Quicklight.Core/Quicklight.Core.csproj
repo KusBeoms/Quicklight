@@ -5,4 +5,11 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Quicklight.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Everything (voidtools, MIT) travels inside Quicklight so file search needs no separate install. -->
+    <EmbeddedResource Include="..\..\third_party\everything\Everything.exe" LogicalName="Quicklight.Everything.exe" />
+    <EmbeddedResource Include="..\..\third_party\everything\License.txt" LogicalName="Quicklight.Everything.License.txt" />
+    <!-- Hash-pinned LibreTranslate environment for the on-demand translation install. -->
+    <EmbeddedResource Include="Translation\libretranslate-requirements.txt" LogicalName="Quicklight.libretranslate-requirements.txt" />
+  </ItemGroup>
 </Project>

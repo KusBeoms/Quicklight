@@ -8,3 +8,4 @@ dist/
 .vs/
 TestResults/
 .library/
+.private/

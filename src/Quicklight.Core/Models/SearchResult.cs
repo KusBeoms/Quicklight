@@ -25,6 +25,8 @@ public enum ActionType
     System,
     /// <summary>Informational row (e.g. "translating…"): Enter does nothing.</summary>
     None,
+    /// <summary>Check GitHub Releases and install a newer Quicklight (handled by the launcher).</summary>
+    Update,
 }
 
 public sealed class SearchResult

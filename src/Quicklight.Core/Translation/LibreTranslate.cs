@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Net;
 using System.Security.Principal;
 using System.Net.Http.Json;
-using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 
 namespace Quicklight.Core.Translation;
@@ -13,6 +12,9 @@ public interface ITranslator
 {
     /// <summary>True when the server answers right now.</summary>
     bool IsReady { get; }
+
+    /// <summary>What the engine is doing while not ready ("installing…"), for the launcher's row; null when idle.</summary>
+    string? Status { get; }
 
     /// <summary>Starts the server if needed and waits until it answers, up to <paramref name="timeout"/>.</summary>
     Task<bool> EnsureReadyAsync(TimeSpan timeout, CancellationToken ct);
@@ -30,7 +32,10 @@ public sealed class LibreTranslateClient : ITranslator, IDisposable
     public static readonly string[] DefaultModels = ["ko", "en", "ja", "zh"];
 
     readonly Uri _baseUri;
-    readonly string? _serverDir;
+    string? _serverExe;
+    readonly TranslationInstaller? _installer;
+    volatile string? _status;
+    DateTime _installFailedUtc = DateTime.MinValue;
     readonly string[] _models;
     readonly HttpClient _http;
     readonly object _gate = new();
@@ -39,14 +44,18 @@ public sealed class LibreTranslateClient : ITranslator, IDisposable
     StreamWriter? _log;
     IntPtr _job;
     volatile bool _ready;
+    volatile bool _disposed;
     DateTime _lastProbe = DateTime.MinValue;
 
-    public LibreTranslateClient(string baseUrl, string? serverDir, IEnumerable<string>? models = null, HttpMessageHandler? handler = null)
+    /// <param name="serverExe">libretranslate.exe to start when nothing answers; null to install one with <paramref name="installer"/>.</param>
+    public LibreTranslateClient(string baseUrl, string? serverExe, IEnumerable<string>? models = null, HttpMessageHandler? handler = null,
+        TranslationInstaller? installer = null)
     {
         _baseUri = new Uri(baseUrl.TrimEnd('/') + "/");
         // Only this computer: the text must never leave the machine through a misconfigured URL.
         if (!IsLocal(_baseUri)) throw new ArgumentException("LibreTranslate URL must point to this computer (localhost / 127.0.0.1 / ::1).", nameof(baseUrl));
-        _serverDir = serverDir;
+        _serverExe = serverExe;
+        _installer = installer;
         _models = (models ?? DefaultModels).ToArray();
         // No redirects and no proxy: a local process answering with a redirect must not forward the text elsewhere.
         _http = new HttpClient(handler ?? new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false });
@@ -55,6 +64,8 @@ public sealed class LibreTranslateClient : ITranslator, IDisposable
     }
 
     public bool IsReady => _ready;
+
+    public string? Status => _status;
 
     /// <summary>
     /// "localhost" or a loopback IP literal. Uri.IsLoopback also accepts names like "loopback", which Windows may resolve
@@ -71,22 +82,23 @@ public sealed class LibreTranslateClient : ITranslator, IDisposable
     public static string ServerLogPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Quicklight", "libretranslate.log");
 
-    static string ServerExe(string dir) => Path.Combine(dir, ".venv", "Scripts", "libretranslate.exe");
+    static string VenvExe(string dir) => Path.Combine(dir, ".venv", "Scripts", "libretranslate.exe");
 
     /// <summary>
-    /// Finds a LibreTranslate checkout with a venv: the configured folder (from the user's own settings), else
-    /// ".library\LibreTranslate" next to or above the exe. The upward search stops below the drive root, where any user
-    /// can create folders, and only accepts a program owned by the current user or an administrator.
+    /// Finds libretranslate.exe: in the configured folder (from the user's own settings), in a ".library\LibreTranslate"
+    /// checkout next to or above the exe, or in the engine Quicklight installed itself. The upward search stops below
+    /// the drive root, where any user can create folders, and only accepts a program owned by the current user or an
+    /// administrator. Null when there is none yet (the installer then provides one).
     /// </summary>
-    public static string? FindServerDir(string? configured)
+    public static string? FindServerExe(string? configuredDir, TranslationInstaller? installer = null)
     {
-        if (!string.IsNullOrWhiteSpace(configured)) return File.Exists(ServerExe(configured)) ? configured : null;
+        if (!string.IsNullOrWhiteSpace(configuredDir)) return File.Exists(VenvExe(configuredDir)) ? VenvExe(configuredDir) : null;
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir?.Parent is not null; dir = dir.Parent)
         {
-            var candidate = Path.Combine(dir.FullName, ".library", "LibreTranslate");
-            if (File.Exists(ServerExe(candidate)) && IsTrustedOwner(ServerExe(candidate))) return candidate;
+            var candidate = VenvExe(Path.Combine(dir.FullName, ".library", "LibreTranslate"));
+            if (File.Exists(candidate) && IsTrustedOwner(candidate)) return candidate;
         }
-        return null;
+        return installer is { IsInstalled: true } ? installer.ServerExe : null;
     }
 
     static bool IsTrustedOwner(string file)
@@ -111,7 +123,7 @@ public sealed class LibreTranslateClient : ITranslator, IDisposable
             using var r = await _http.GetAsync(new Uri(_baseUri, "languages"), cts.Token).ConfigureAwait(false);
             _ready = r.IsSuccessStatusCode;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or ObjectDisposedException && !ct.IsCancellationRequested)
         {
             _ready = false;
         }
@@ -131,10 +143,33 @@ public sealed class LibreTranslateClient : ITranslator, IDisposable
     /// <summary>Probes; if nothing answers, launches the server and polls until it is up (first run downloads models).</summary>
     async Task<bool> StartAndWaitAsync()
     {
+        if (_disposed) return false;
         if (await ProbeAsync(CancellationToken.None).ConfigureAwait(false)) return true;
+        if (_disposed) return false;
         if (_server is null || _server.HasExited)
         {
-            if (_serverDir is null) { Log.Error("LibreTranslate is not running and no server folder with .venv was found"); return false; }
+            if (_serverExe is null && _installer is not null)
+            {
+                // After a failed install, wait before trying again instead of re-downloading on every keystroke.
+                if (DateTime.UtcNow - _installFailedUtc < TimeSpan.FromMinutes(10)) return false;
+                try
+                {
+                    _serverExe = await _installer.InstallAsync(new Progress<string>(s => _status = s), CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is TranslationException or HttpRequestException or IOException or TaskCanceledException
+                                               or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidDataException)
+                {
+                    Log.Error("translation engine install failed", ex);
+                    // Another process installing is not a failure: check again in half a minute, not ten.
+                    _installFailedUtc = ex is TranslationInstaller.InstallInProgressException
+                        ? DateTime.UtcNow - TimeSpan.FromMinutes(10) + TimeSpan.FromSeconds(30)
+                        : DateTime.UtcNow;
+                    _status = "번역 엔진을 설치하지 못했습니다: " + ex.Message;
+                    return false;
+                }
+            }
+            if (_serverExe is null) { Log.Error("LibreTranslate is not running and no server program was found"); return false; }
+            _status = "번역 엔진을 시작하는 중… 처음에는 언어 모델(약 700MB)을 내려받느라 몇 분 걸립니다";
             try { StartServer(); }
             catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException or InvalidOperationException)
             {
@@ -143,10 +178,10 @@ public sealed class LibreTranslateClient : ITranslator, IDisposable
             }
         }
         var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(15); // model download on first run
-        while (DateTime.UtcNow < deadline)
+        while (DateTime.UtcNow < deadline && !_disposed)
         {
             if (_server is { HasExited: true }) { Log.Error($"LibreTranslate exited with {_server.ExitCode}; see {ServerLogPath}"); return false; }
-            if (await ProbeAsync(CancellationToken.None).ConfigureAwait(false)) { Log.Info("LibreTranslate is ready"); return true; }
+            if (await ProbeAsync(CancellationToken.None).ConfigureAwait(false)) { Log.Info("LibreTranslate is ready"); _status = null; return true; }
             await Task.Delay(1000).ConfigureAwait(false);
         }
         return false;
@@ -154,10 +189,15 @@ public sealed class LibreTranslateClient : ITranslator, IDisposable
 
     void StartServer()
     {
-        var exe = ServerExe(_serverDir!);
+        // A previous server that died: release its process object and job before starting another.
+        _server?.Dispose();
+        _server = null;
+        Native.JobObject.Close(ref _job);
+
+        var exe = _serverExe!;
         var psi = new ProcessStartInfo(exe)
         {
-            WorkingDirectory = _serverDir!,
+            WorkingDirectory = Path.GetDirectoryName(exe)!,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
@@ -173,18 +213,33 @@ public sealed class LibreTranslateClient : ITranslator, IDisposable
         _log?.Dispose();
         var log = _log = new StreamWriter(new FileStream(ServerLogPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite)) { AutoFlush = true };
         _server = Process.Start(psi) ?? throw new InvalidOperationException("could not start LibreTranslate");
-        _server.OutputDataReceived += (_, e) => { if (e.Data is not null) lock (log) log.WriteLine(e.Data); };
-        _server.ErrorDataReceived += (_, e) => { if (e.Data is not null) lock (log) log.WriteLine(e.Data); };
+        _server.OutputDataReceived += (_, e) => WriteLog(log, e.Data);
+        _server.ErrorDataReceived += (_, e) => WriteLog(log, e.Data);
         _server.BeginOutputReadLine();
         _server.BeginErrorReadLine();
         TieToThisProcess(_server);
         Log.Info($"started LibreTranslate (pid {_server.Id}) on {_baseUri}");
     }
 
+    // Output can still arrive while Quicklight shuts down and closes the log.
+    static void WriteLog(StreamWriter log, string? line)
+    {
+        if (line is null) return;
+        try { lock (log) log.WriteLine(line); }
+        catch (ObjectDisposedException) { }
+    }
+
     public async Task<TranslationResult> TranslateAsync(string text, string target, CancellationToken ct)
     {
         var body = new JsonObject { ["q"] = text, ["source"] = "auto", ["target"] = target, ["format"] = "text", ["alternatives"] = 3 };
-        using var response = await _http.PostAsync(new Uri(_baseUri, "translate"), JsonContent.Create(body), ct).ConfigureAwait(false);
+        HttpResponseMessage response;
+        try { response = await _http.PostAsync(new Uri(_baseUri, "translate"), JsonContent.Create(body), ct).ConfigureAwait(false); }
+        catch (HttpRequestException)
+        {
+            _ready = false; // the server went away; the next request starts or finds it again
+            throw;
+        }
+        using var _ = response;
         var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
             throw new TranslationException(Parse(json)?["error"]?.ToString() ?? $"LibreTranslate returned {(int)response.StatusCode}");
@@ -214,60 +269,21 @@ public sealed class LibreTranslateClient : ITranslator, IDisposable
         catch (System.Text.Json.JsonException) { return null; }
     }
 
-    // A job object with KILL_ON_JOB_CLOSE: when Quicklight exits (or crashes), Windows ends the server too.
+    // Kill-on-close job: when Quicklight exits (or crashes), Windows ends the server too.
     void TieToThisProcess(Process p)
     {
-        try
-        {
-            _job = CreateJobObject(IntPtr.Zero, null);
-            var info = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION { BasicLimitInformation = { LimitFlags = 0x2000 /* KILL_ON_JOB_CLOSE */ } };
-            int size = Marshal.SizeOf(info);
-            var ptr = Marshal.AllocHGlobal(size);
-            try
-            {
-                Marshal.StructureToPtr(info, ptr, false);
-                SetInformationJobObject(_job, 9 /* ExtendedLimitInformation */, ptr, (uint)size);
-            }
-            finally { Marshal.FreeHGlobal(ptr); }
-            AssignProcessToJobObject(_job, p.Handle);
-        }
-        catch (Exception ex) { Log.Error("could not tie LibreTranslate to Quicklight", ex); }
+        _job = Native.JobObject.KillOnClose(p);
+        if (_job == IntPtr.Zero) Log.Error("could not tie LibreTranslate to Quicklight");
     }
 
     public void Dispose()
     {
+        _disposed = true;
         try { if (_server is { HasExited: false }) _server.Kill(entireProcessTree: true); } catch { }
-        if (_job != IntPtr.Zero) CloseHandle(_job);
+        Native.JobObject.Close(ref _job);
         _http.Dispose();
         _log?.Dispose();
     }
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct JOBOBJECT_BASIC_LIMIT_INFORMATION
-    {
-        public long PerProcessUserTimeLimit, PerJobUserTimeLimit;
-        public uint LimitFlags;
-        public UIntPtr MinimumWorkingSetSize, MaximumWorkingSetSize;
-        public uint ActiveProcessLimit;
-        public UIntPtr Affinity;
-        public uint PriorityClass, SchedulingClass;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct IO_COUNTERS { public ulong a, b, c, d, e, f; }
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
-    {
-        public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
-        public IO_COUNTERS IoInfo;
-        public UIntPtr ProcessMemoryLimit, JobMemoryLimit, PeakProcessMemoryUsed, PeakJobMemoryUsed;
-    }
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr CreateJobObject(IntPtr attrs, string? name);
-    [DllImport("kernel32.dll")] static extern bool SetInformationJobObject(IntPtr job, int cls, IntPtr info, uint size);
-    [DllImport("kernel32.dll")] static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
-    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
 }
 
-public sealed class TranslationException(string message) : Exception(message);
+public class TranslationException(string message) : Exception(message);

@@ -19,19 +19,23 @@ public static class TranslationParser
 
     static readonly Regex[] Patterns =
     [
-        // "사과 영어로", "사과 영어로 번역해줘", "사과를 영어로"
-        new($@"^(?<text>.+?)(?:을|를)?\s*(?<lang>{Lang})\s*(?:으로|로)(?:\s*(?:번역|바꿔)(?:해\s*줘|해|하기)?)?\s*$", Opts, Timeout),
-        // "영어로 사과", "영어로 번역 사과"
-        new($@"^(?<lang>{Lang})\s*(?:으로|로)\s+(?:번역\s+)?(?<text>.+)$", Opts, Timeout),
-        // "good morning in korean", "hello to japanese", "translate hello to french"
-        new($@"^(?:translate\s+)?(?<text>.+?)\s+(?:in|to|into)\s+(?<lang>{Lang})\s*$", Opts, Timeout),
+        // "사과 영어로", "사과 영어로 번역해줘", "사과를 영어로", "사과는 영어로 뭐야?"
+        new($@"^(?<text>.+?)(?:을|를|은|는)?\s*(?<lang>{Lang})\s*(?:으로|로)(?:\s*(?:번역|바꿔)(?:해\s*줘|해|하기)?|\s*(?:뭐야|뭐지|뭐라고\s*해))?\s*\??\s*$", Opts, Timeout),
+        // "영어로 번역 사과". 번역 is required: "한국어로 설정", "한글로 문서 만들기" are searches.
+        new($@"^(?<lang>{Lang})\s*(?:으로|로)\s+번역(?:해\s*줘|해)?\s+(?<text>.+)$", Opts, Timeout),
+        // "translate hello to french"
+        new($@"^translate\s+(?<text>.+?)\s+(?:in|to|into)\s+(?<lang>{Lang})\s*$", Opts, Timeout),
+        // "good morning in korean" (only "in": "change language to korean" is a search)
+        new($@"^(?<text>.+?)\s+in\s+(?<lang>{Lang})\s*\??\s*$", Opts, Timeout),
         // "번역 hello", "translate: hello"
         new(@"^(?:번역|translate)\s*[:：]?\s+(?<text>.+)$", Opts, Timeout),
         // "hello 번역", "hello 번역해줘", "hello translate". The space matters: "자동번역" is a search.
         new(@"^(?<text>.+?)\s+(?:번역(?:해\s*줘|해|하기)?|translate)\s*$", Opts, Timeout),
-        // "serendipity 뜻", "serendipity meaning", "serendipity 뜻이 뭐야"
-        new(@"^(?<text>.+?)\s+(?:뜻|의미|meaning)(?:이\s*뭐야|은|이)?\s*\??\s*$", Opts, Timeout),
+        // "serendipity 뜻", "serendipity의 뜻", "serendipity meaning", "serendipity 뜻이 뭐야". Not 의미: "삶의 의미" is a search.
+        new(@"^(?<text>.+?)(?:의)?\s+(?:뜻|meaning)(?:이\s*뭐야|은\s*뭐야|이|은)?\s*\??\s*$", Opts, Timeout),
     ];
+
+    static readonly Regex OnlyLanguage = new($@"^(?:{Lang})\s*(?:으로|로)?$", Opts, Timeout);
 
     public static TranslationRequest? Parse(string query)
     {
@@ -44,7 +48,7 @@ public static class TranslationParser
             catch (RegexMatchTimeoutException) { return null; }
             if (!m.Success) continue;
             var text = m.Groups["text"].Value.Trim().Trim('"', '“', '”', '\'');
-            if (text.Length == 0) continue;
+            if (text.Length == 0 || OnlyLanguage.IsMatch(text)) continue; // "영어로 번역" has nothing to translate
             string? target = m.Groups["lang"].Success ? Languages.CodeFor(m.Groups["lang"].Value) : null;
             return new TranslationRequest(text, target);
         }
@@ -55,10 +59,23 @@ public static class TranslationParser
     /// Default target: the system language, unless the text already is in it, then <paramref name="secondary"/>
     /// (English by default). Scripts decide what can be decided locally; Latin text goes to the system language.
     /// </summary>
-    public static string DefaultTarget(string text, string system, string secondary)
+    public static string DefaultTarget(string text, string system, string secondary, IReadOnlyCollection<string>? models = null)
     {
+        // A system language the server has no model for (e.g. German with ko/en/ja/zh loaded) cannot be the target.
+        if (models is { Count: > 0 } && !models.Contains(system)) system = models.Contains(secondary) ? secondary : "en";
         var guess = Languages.GuessByScript(text);
-        if (guess == system) return secondary == system ? "en" : secondary;
+        if (guess == system) return Fallback(system, secondary, models);
         return system;
+    }
+
+    /// <summary>
+    /// Where to go instead when the text already is in <paramref name="target"/> (the server detected it so):
+    /// the secondary language, or else another loaded language.
+    /// </summary>
+    public static string Fallback(string target, string secondary, IReadOnlyCollection<string>? models = null)
+    {
+        if (secondary != target) return secondary;
+        if (target != "en") return "en";
+        return models?.FirstOrDefault(m => m != target) ?? "ko";
     }
 }

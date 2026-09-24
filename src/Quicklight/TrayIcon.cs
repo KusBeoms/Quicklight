@@ -10,7 +10,7 @@ public sealed class TrayIcon : IDisposable
     readonly Forms.NotifyIcon _icon;
     readonly QuicklightSettings _settings;
 
-    public TrayIcon(QuicklightSettings settings, Action show, Action reload, Action exit)
+    public TrayIcon(QuicklightSettings settings, Action show, Action reload, Action exit, Action installEverything)
     {
         _settings = settings;
         var iconStream = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/quicklight.ico"))!.Stream;
@@ -36,9 +36,16 @@ public sealed class TrayIcon : IDisposable
             Autostart.Sync(autostart.Checked);
         };
         menu.Items.Add(autostart);
+        // Shown only while file search has no Everything to use.
+        var everything = new Forms.ToolStripMenuItem("파일 검색 엔진(Everything) 설치…", null, (_, _) => installEverything());
+        menu.Items.Add(everything);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("종료", null, (_, _) => exit());
-        menu.Opening += (_, _) => open.Text = $"열기 ({_settings.Hotkey})";
+        menu.Opening += (_, _) =>
+        {
+            open.Text = $"열기 ({_settings.Hotkey})";
+            everything.Visible = _settings.FileSearch && Quicklight.Core.Everything.EverythingBootstrap.FindInstalled() is null;
+        };
         _icon.ContextMenuStrip = menu;
         _icon.MouseClick += (_, e) => { if (e.Button == Forms.MouseButtons.Left) show(); };
         _ = PromoteAsync();
