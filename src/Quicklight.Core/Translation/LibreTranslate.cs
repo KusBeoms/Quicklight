@@ -154,7 +154,13 @@ public sealed class LibreTranslateClient : ITranslator, IDisposable
                 if (DateTime.UtcNow - _installFailedUtc < TimeSpan.FromMinutes(10)) return false;
                 try
                 {
-                    _serverExe = await _installer.InstallAsync(new Progress<string>(s => _status = s), CancellationToken.None).ConfigureAwait(false);
+                    using var activity = Activity.ActivityTracker.Shared.Begin("translate", "번역 엔진 설치", 0);
+                    // Synchronous IProgress: reports come from pip's output thread, in order.
+                    _serverExe = await _installer.InstallAsync(new SyncProgress<InstallProgress>(p =>
+                    {
+                        _status = p.Text;
+                        activity.Report(p.Text, p.Fraction);
+                    }), CancellationToken.None).ConfigureAwait(false);
                 }
                 catch (Exception ex) when (ex is TranslationException or HttpRequestException or IOException or TaskCanceledException
                                                or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidDataException)
@@ -178,13 +184,42 @@ public sealed class LibreTranslateClient : ITranslator, IDisposable
             }
         }
         var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(15); // model download on first run
+        using var starting = Activity.ActivityTracker.Shared.Begin("translate", "번역 엔진 시작 중");
+        long modelsAtStart = ModelBytes();
+        long expected = 170L * 1024 * 1024 * _models.Length; // about 170 MB per language model
         while (DateTime.UtcNow < deadline && !_disposed)
         {
+            // First start downloads the models: show how much has arrived, else a moving bar.
+            long now = ModelBytes();
+            if (modelsAtStart < expected / 2 && now > modelsAtStart)
+                starting.Report("번역 언어 모델 내려받는 중", Math.Min(0.99, (double)now / expected), $"{now >> 20} / 약 {expected >> 20} MB");
             if (_server is { HasExited: true }) { Log.Error($"LibreTranslate exited with {_server.ExitCode}; see {ServerLogPath}"); return false; }
             if (await ProbeAsync(CancellationToken.None).ConfigureAwait(false)) { Log.Info("LibreTranslate is ready"); _status = null; return true; }
             await Task.Delay(1000).ConfigureAwait(false);
         }
         return false;
+    }
+
+    /// <summary>Size of the downloaded argos-translate models (and partial downloads).</summary>
+    static long ModelBytes()
+    {
+        long total = 0;
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        foreach (var dir in new[] { Path.Combine(home, ".local", "share", "argos-translate"), Path.Combine(home, ".local", "cache", "argos-translate") })
+        {
+            try
+            {
+                if (Directory.Exists(dir))
+                    total += new DirectoryInfo(dir).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+        return total;
+    }
+
+    sealed class SyncProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
     }
 
     void StartServer()

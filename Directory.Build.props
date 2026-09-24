@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <!-- The updater only accepts downloads whose product name is Quicklight. -->
     <Product>Quicklight</Product>
     <Authors>kusbeoms</Authors>

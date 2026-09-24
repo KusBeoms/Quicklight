@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using Quicklight.Core;
+using Quicklight.Core.Activity;
 using Quicklight.Core.Everything;
 using Quicklight.Core.Models;
 using Quicklight.Core.Providers;
@@ -29,6 +30,11 @@ public partial class MainWindow : Window
     readonly IconLoader _icons = new(64);
     readonly ObservableCollection<ResultItem> _items = [];
     readonly ObservableCollection<ResultItem> _apps = [];
+    readonly ObservableCollection<ActivityItem> _activities = [];
+    readonly System.Windows.Threading.DispatcherTimer _indexPoll = new() { Interval = TimeSpan.FromSeconds(1) };
+    ActivityTracker.Handle? _indexActivity;
+    int _indexBusyPolls;
+    int _activitySyncQueued;
     IReadOnlyList<AppEntry>? _catalogSource;
     CancellationTokenSource? _cts;
     string? _armedKey; // result waiting for the second Enter of a destructive command
@@ -48,6 +54,15 @@ public partial class MainWindow : Window
         ((CollectionViewSource)Resources["GroupedResults"]).Source = _items;
         ((CollectionViewSource)Resources["GroupedApps"]).Source = _apps;
         Deactivated += (_, _) => { if (!Pinned) HideLauncher(); };
+        Activities.ItemsSource = _activities;
+        ActivityTracker.Shared.Changed += QueueActivitySync;
+        _indexPoll.Tick += (_, _) => _ = PollIndexAsync();
+        IsVisibleChanged += (_, _) =>
+        {
+            if (IsVisible) { _indexPoll.Start(); _ = PollIndexAsync(); }
+            else _indexPoll.Stop();
+        };
+        SyncActivities();
     }
 
     bool IsGrid => AppGrid.Visibility == Visibility.Visible;
@@ -183,7 +198,9 @@ public partial class MainWindow : Window
     {
         var size = Panel.RenderSize;
         if (size.Width <= 0 || size.Height <= 0) return;
-        bool expanded = Results.Visibility == Visibility.Visible || IsGrid;
+        bool lists = Results.Visibility == Visibility.Visible || IsGrid;
+        Separator.Visibility = lists ? Visibility.Visible : Visibility.Collapsed;
+        bool expanded = lists || ActivityPanel.Visibility == Visibility.Visible;
         double r = expanded ? ExpandedRadius : size.Height / 2;
         Panel.Clip = new RectangleGeometry(new Rect(size), r, r);
         ShadowShape.CornerRadius = Outline.CornerRadius = new CornerRadius(r);
@@ -352,6 +369,13 @@ public partial class MainWindow : Window
     void Query_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         var mods = Keyboard.Modifiers;
+        // Alt+. : Everything's own settings (indexed folders and drives, exclusions). With Alt held WPF reports Key.System.
+        if (e.Key == Key.System && e.SystemKey == Key.OemPeriod)
+        {
+            _ = OpenEverythingOptionsAsync();
+            e.Handled = true;
+            return;
+        }
         switch (e.Key)
         {
             case Key.Down when IsGrid: MoveInGrid(+1); e.Handled = true; break;
@@ -581,7 +605,13 @@ public partial class MainWindow : Window
         {
             var exe = Environment.ProcessPath ?? throw new UpdateException("Cannot tell where Quicklight is installed.");
             using var updater = new Updater(_settings.UpdateRepository);
-            var progress = new Progress<double>(p => SetUpdateStatus($"v{release.Version.ToString(3)} 내려받는 중… {p:P0}   ·   Esc로 취소"));
+            var title = $"Quicklight v{release.Version.ToString(3)} 내려받는 중";
+            using var activity = ActivityTracker.Shared.Begin("update", title, 0, "Esc로 취소");
+            var progress = new Progress<double>(p =>
+            {
+                SetUpdateStatus($"v{release.Version.ToString(3)} 내려받는 중… {p:P0}   ·   Esc로 취소");
+                activity.Report(title, p, "Esc로 취소");
+            });
             var downloaded = await updater.DownloadAsync(release, exe, Updater.CurrentVersion, progress, _updateCts.Token);
             SetUpdateStatus($"v{release.Version.ToString(3)}(으)로 다시 시작합니다…");
             await Task.Delay(400, _updateCts.Token); // Esc in this moment still cancels
@@ -638,6 +668,77 @@ public partial class MainWindow : Window
         if (r.RevealPath is not null) parts.Add("우클릭  더 보기");
         parts.Add("Esc  닫기");
         FooterText.Text = string.Join("      ", parts);
+    }
+
+    // ---------- background activity ----------
+
+    /// <summary>Tracker events come from any thread, often in bursts (pip output): sync once per dispatcher turn.</summary>
+    void QueueActivitySync()
+    {
+        if (Interlocked.Exchange(ref _activitySyncQueued, 1) == 1) return;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
+        {
+            Interlocked.Exchange(ref _activitySyncQueued, 0);
+            SyncActivities();
+        });
+    }
+
+    /// <summary>Mirrors the tracker into the bars, updating rows in place so progress animates instead of flickering.</summary>
+    void SyncActivities()
+    {
+        var snapshot = ActivityTracker.Shared.Snapshot();
+        for (int i = _activities.Count - 1; i >= 0; i--)
+            if (!snapshot.Any(a => a.Id == _activities[i].Id)) _activities.RemoveAt(i);
+        foreach (var info in snapshot)
+        {
+            var item = _activities.FirstOrDefault(a => a.Id == info.Id);
+            if (item is null) _activities.Add(item = new ActivityItem(info.Id));
+            item.Update(info);
+        }
+        var visibility = _activities.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (ActivityPanel.Visibility == visibility) return;
+        ActivityPanel.Visibility = visibility;
+        UpdateShape();
+    }
+
+    /// <summary>
+    /// While the launcher is open, shows Everything's indexing as a bar: loading its database (after a restart or a
+    /// rescan) right away, busy only when it lasts, since every search makes Everything briefly busy too.
+    /// </summary>
+    async Task PollIndexAsync()
+    {
+        var state = _settings.FileSearch ? await Task.Run(() => EverythingClient.GetDbState(200)) : EverythingClient.DbState.NotRunning;
+        _indexBusyPolls = state == EverythingClient.DbState.Busy ? _indexBusyPolls + 1 : 0;
+        string? detail = state switch
+        {
+            EverythingClient.DbState.Loading => "색인을 읽는 중",
+            EverythingClient.DbState.Busy when _indexBusyPolls >= 3 => "변경 사항을 반영하는 중",
+            _ => null,
+        };
+        if (detail is null)
+        {
+            _indexActivity?.Dispose();
+            _indexActivity = null;
+        }
+        else if (_indexActivity is null) _indexActivity = ActivityTracker.Shared.Begin("everything", "파일 색인 중 (Everything)", null, detail);
+        else _indexActivity.Report("파일 색인 중 (Everything)", null, detail);
+    }
+
+    async Task OpenEverythingOptionsAsync()
+    {
+        if (!EverythingClient.IsAvailable)
+        {
+            Status.Text = "Everything을 시작하는 중…";
+            var outcome = await EverythingBootstrap.EnsureRunningAsync(_settings);
+            if (outcome is not (EverythingBootstrap.Outcome.AlreadyRunning or EverythingBootstrap.Outcome.Started))
+            {
+                Status.Text = outcome == EverythingBootstrap.Outcome.Disabled ? "파일 검색이 꺼져 있습니다" : "Everything을 시작하지 못했습니다";
+                return;
+            }
+            Status.Text = "";
+        }
+        if (EverythingClient.OpenOptions()) HideLauncher(); // get out of the way of the dialog (the launcher is topmost)
+        else Status.Text = "Everything 설정을 열지 못했습니다";
     }
 
     /// <summary>Checks Everything off the UI thread: a busy Everything must not delay the first paint.</summary>

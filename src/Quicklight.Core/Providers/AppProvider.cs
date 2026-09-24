@@ -36,6 +36,8 @@ public sealed class AppProvider : IResultProvider
     public async Task RefreshAsync(TimeSpan maxAge)
     {
         if (DateTime.UtcNow - _lastRefresh < maxAge || Interlocked.Exchange(ref _refreshing, 1) == 1) return;
+        // Only the first index is worth showing; later refreshes happen quietly in the background.
+        using var activity = _lastRefresh == DateTime.MinValue ? Activity.ActivityTracker.Shared.Begin("apps", "앱 목록 색인 중") : null;
         try
         {
             var apps = await ShellApps.EnumerateAsync().ConfigureAwait(false);

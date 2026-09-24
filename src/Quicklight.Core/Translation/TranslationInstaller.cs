@@ -10,6 +10,9 @@ namespace Quicklight.Core.Translation;
 /// Python (python.org's official NuGet build, checked against a pinned SHA-256) and installs LibreTranslate with pip
 /// into %LOCALAPPDATA%\Quicklight\translate. The server downloads its language models on its first start.
 /// </summary>
+/// <param name="Fraction">0..1 of the whole install, or null while it cannot be measured.</param>
+public sealed record InstallProgress(string Text, double? Fraction);
+
 public sealed class TranslationInstaller(string? root = null, HttpMessageHandler? handler = null)
 {
     public const string LibreTranslateVersion = "1.9.6";
@@ -30,7 +33,7 @@ public sealed class TranslationInstaller(string? root = null, HttpMessageHandler
     public bool IsInstalled => File.Exists(Marker) && File.Exists(ServerExe);
 
     /// <summary>Returns the server executable, installing first if needed. Reports human-readable steps.</summary>
-    public async Task<string> InstallAsync(IProgress<string>? progress, CancellationToken ct)
+    public async Task<string> InstallAsync(IProgress<InstallProgress>? progress, CancellationToken ct)
     {
         if (IsInstalled) return ServerExe;
         Directory.CreateDirectory(Root);
@@ -44,9 +47,10 @@ public sealed class TranslationInstaller(string? root = null, HttpMessageHandler
 
         if (!File.Exists(Path.Combine(PythonDir, "python.exe")))
         {
-            progress?.Report("번역 엔진 설치 1/2: Python 내려받는 중 (15MB)");
+            progress?.Report(new("번역 엔진 설치 1/2: Python 내려받는 중 (15MB)", 0));
             var package = Path.Combine(Root, "python.nupkg");
-            await DownloadAsync(PythonUrl, package, ct).ConfigureAwait(false);
+            // Python is the first tenth of the install; the packages are the rest.
+            await DownloadAsync(PythonUrl, package, f => progress?.Report(new("번역 엔진 설치 1/2: Python 내려받는 중 (15MB)", 0.1 * f)), ct).ConfigureAwait(false);
             try
             {
                 if (!Sha256(package).Equals(PythonSha256, StringComparison.OrdinalIgnoreCase))
@@ -61,7 +65,8 @@ public sealed class TranslationInstaller(string? root = null, HttpMessageHandler
             finally { File.Delete(package); }
         }
 
-        progress?.Report("번역 엔진 설치 2/2: LibreTranslate 설치 중 (약 350MB, 몇 분 걸립니다)");
+        const string packagesText = "번역 엔진 설치 2/2: LibreTranslate 설치 중 (약 350MB, 몇 분 걸립니다)";
+        progress?.Report(new(packagesText, 0.1));
         var python = Path.Combine(PythonDir, "python.exe");
         // Every package pinned by version and SHA-256 (generated from a tested install), so nothing on PyPI can change what runs.
         var requirements = Path.Combine(Root, "requirements.txt");
@@ -69,8 +74,18 @@ public sealed class TranslationInstaller(string? root = null, HttpMessageHandler
                                ?? throw new TranslationException("missing requirements lock"))
         await using (var dst = File.Create(requirements))
             await src.CopyToAsync(dst, ct).ConfigureAwait(false);
+        // pip prints "Collecting <package>" once per package of the lock; after the last one it only installs.
+        int total = File.ReadLines(requirements).Count(l => l.Length > 0 && !l.StartsWith('#'));
+        int collected = 0;
+        void OnLine(string line)
+        {
+            if (!line.StartsWith("Collecting ", StringComparison.Ordinal)) return;
+            int n = Interlocked.Increment(ref collected);
+            progress?.Report(new(packagesText, 0.1 + 0.85 * Math.Min(1.0, (double)n / Math.Max(1, total))));
+        }
         await RunAsync(python, ["-m", "pip", "install", "--disable-pip-version-check", "--no-warn-script-location",
-            "--require-hashes", "--no-deps", "-r", requirements], ct).ConfigureAwait(false);
+            "--require-hashes", "--no-deps", "-r", requirements], ct, OnLine).ConfigureAwait(false);
+        progress?.Report(new("번역 엔진 설치 마무리 중", 0.97));
         if (!File.Exists(ServerExe)) throw new TranslationException($"LibreTranslate did not install; see {LogPath}");
         File.WriteAllText(Marker, DateTime.UtcNow.ToString("O"));
         return ServerExe;
@@ -79,15 +94,24 @@ public sealed class TranslationInstaller(string? root = null, HttpMessageHandler
     /// <summary>Another Quicklight process holds the install lock: not a failure, just not our turn.</summary>
     public sealed class InstallInProgressException() : TranslationException("다른 Quicklight가 번역 엔진을 설치하고 있습니다");
 
-    async Task DownloadAsync(string url, string path, CancellationToken ct)
+    async Task DownloadAsync(string url, string path, Action<double> fraction, CancellationToken ct)
     {
         using var http = handler is null ? new HttpClient() : new HttpClient(handler);
         http.Timeout = TimeSpan.FromMinutes(5);
         using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
+        long total = response.Content.Headers.ContentLength ?? 0;
         await using var src = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
         await using var dst = File.Create(path);
-        await src.CopyToAsync(dst, ct).ConfigureAwait(false);
+        var buffer = new byte[1 << 16];
+        long done = 0;
+        int read;
+        while ((read = await src.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+        {
+            await dst.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+            done += read;
+            if (total > 0) fraction((double)done / total);
+        }
     }
 
     internal static string Sha256(string path)
@@ -111,7 +135,7 @@ public sealed class TranslationInstaller(string? root = null, HttpMessageHandler
         }
     }
 
-    async Task RunAsync(string exe, string[] args, CancellationToken ct)
+    async Task RunAsync(string exe, string[] args, CancellationToken ct, Action<string>? onLine = null)
     {
         var psi = new ProcessStartInfo(exe)
         {
@@ -124,7 +148,12 @@ public sealed class TranslationInstaller(string? root = null, HttpMessageHandler
         using var p = Process.Start(psi) ?? throw new TranslationException("could not start Python");
         // pip ends with Quicklight: an interrupted install must not keep running (or race the next one).
         var job = Native.JobObject.KillOnClose(p);
-        p.OutputDataReceived += (_, e) => { if (e.Data is not null) lock (log) log.WriteLine(e.Data); };
+        p.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data is null) return;
+            lock (log) log.WriteLine(e.Data);
+            onLine?.Invoke(e.Data);
+        };
         p.ErrorDataReceived += (_, e) => { if (e.Data is not null) lock (log) log.WriteLine(e.Data); };
         p.BeginOutputReadLine();
         p.BeginErrorReadLine();

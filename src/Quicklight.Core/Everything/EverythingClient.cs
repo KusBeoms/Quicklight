@@ -87,6 +87,34 @@ public sealed class EverythingClient : IDisposable
         return new Version(parts[0], parts[1], parts[2]);
     }
 
+    public enum DbState { NotRunning, Unresponsive, Loading, Busy, Ready }
+
+    /// <summary>Whether Everything's index is loaded and idle (IPC IS_DB_LOADED = 401, IS_DB_BUSY = 402).</summary>
+    public static DbState GetDbState(uint timeoutMs = 300)
+    {
+        var h = FindEverythingWindow();
+        if (h == IntPtr.Zero) return DbState.NotRunning;
+        if (Win32.SendMessageTimeout(h, 0x0400, (IntPtr)401, IntPtr.Zero, Win32.SMTO_ABORTIFHUNG, timeoutMs, out var loaded) == IntPtr.Zero)
+            return DbState.Unresponsive;
+        if (loaded == IntPtr.Zero) return DbState.Loading;
+        if (Win32.SendMessageTimeout(h, 0x0400, (IntPtr)402, IntPtr.Zero, Win32.SMTO_ABORTIFHUNG, timeoutMs, out var busy) == IntPtr.Zero)
+            return DbState.Unresponsive;
+        return busy != IntPtr.Zero ? DbState.Busy : DbState.Ready;
+    }
+
+    /// <summary>
+    /// Opens Everything's Options dialog (indexed folders, NTFS volumes, exclusions) through its tray menu command
+    /// (EVERYTHING_IPC_ID_TRAY_OPTIONS = 40005). False if Everything is not running.
+    /// </summary>
+    public static bool OpenOptions()
+    {
+        var h = FindEverythingWindow();
+        if (h == IntPtr.Zero) return false;
+        // The dialog belongs to Everything's process; let it take the foreground from us.
+        if (Win32.GetWindowThreadProcessId(h, out var pid) != 0) Win32.AllowSetForegroundWindow(pid);
+        return Win32.PostMessage(h, 0x0111 /* WM_COMMAND */, (IntPtr)40005, IntPtr.Zero);
+    }
+
     static IntPtr FindEverythingWindow()
     {
         var h = Win32.FindWindow(IpcWindowClass, null);

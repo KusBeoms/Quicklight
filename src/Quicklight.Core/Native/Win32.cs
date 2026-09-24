@@ -73,6 +73,15 @@ internal static class Win32
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
 
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+
+    [DllImport("user32.dll")]
+    public static extern bool AllowSetForegroundWindow(uint processId);
+
     [DllImport("user32.dll")]
     public static extern uint MsgWaitForMultipleObjects(uint count, IntPtr[]? handles, bool waitAll, uint ms, uint wakeMask);
 

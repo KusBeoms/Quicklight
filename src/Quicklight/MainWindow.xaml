@@ -132,6 +132,54 @@
             <TextBlock Text="{Binding Name}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource HeaderBrush}" Margin="22,8,0,3" />
         </DataTemplate>
 
+        <!-- Background work (translation install, model download, update download, indexing) as a thin bar. -->
+        <DataTemplate x:Key="ActivityTemplate">
+            <StackPanel Margin="24,7">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Title}" FontSize="12" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1" Text="{Binding RightText}" FontSize="11.5" Foreground="{DynamicResource SubtleTextBrush}" Margin="12,0,0,0" />
+                </Grid>
+                <Grid Height="4" Margin="0,6,0,0" ClipToBounds="True">
+                    <Border CornerRadius="2" Background="{DynamicResource SeparatorBrush}" />
+                    <Border x:Name="Fill" CornerRadius="2" Background="{DynamicResource AccentBrush}" RenderTransformOrigin="0,0.5">
+                        <Border.RenderTransform>
+                            <ScaleTransform ScaleX="{Binding Progress}" />
+                        </Border.RenderTransform>
+                    </Border>
+                    <Border x:Name="Runner" Width="140" HorizontalAlignment="Left" CornerRadius="2" Background="{DynamicResource AccentBrush}" Visibility="Collapsed">
+                        <Border.RenderTransform>
+                            <TranslateTransform X="-140" />
+                        </Border.RenderTransform>
+                    </Border>
+                </Grid>
+            </StackPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsIndeterminate}" Value="True">
+                    <Setter TargetName="Fill" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="Runner" Property="Visibility" Value="Visible" />
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard x:Name="Run">
+                            <Storyboard RepeatBehavior="Forever">
+                                <DoubleAnimation Storyboard.TargetName="Runner" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                                                 From="-140" To="680" Duration="0:0:1.4">
+                                    <DoubleAnimation.EasingFunction>
+                                        <SineEase EasingMode="EaseInOut" />
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <StopStoryboard BeginStoryboardName="Run" />
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
         <!-- Right-click menu, drawn to match the panel. -->
         <Style TargetType="ContextMenu">
             <Setter Property="OverridesDefaultStyle" Value="True" />
@@ -252,6 +300,11 @@
                         <GroupStyle HeaderTemplate="{StaticResource GroupHeader}" />
                     </ListBox.GroupStyle>
                 </ListBox>
+
+                <Border x:Name="ActivityPanel" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SeparatorBrush}" Padding="0,3"
+                        Visibility="Collapsed" IsHitTestVisible="False">
+                    <ItemsControl x:Name="Activities" ItemTemplate="{StaticResource ActivityTemplate}" Focusable="False" />
+                </Border>
 
                 <Border x:Name="Footer" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SeparatorBrush}" Padding="24,8" Visibility="Collapsed">
                     <TextBlock x:Name="FooterText" FontSize="11.5" Foreground="{DynamicResource SubtleTextBrush}" TextTrimming="CharacterEllipsis" />

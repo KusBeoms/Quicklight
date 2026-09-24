@@ -14,6 +14,7 @@ Windows용 Spotlight 스타일 런처입니다. **Alt+Space** 를 누르면 화�
 | 답변 카드 | 계산, 환전, 번역 결과가 맨 위에 오면 큰 글씨 카드로 표시. Enter는 결과 복사 |
 | MCP 서버 | `Quicklight.exe --mcp` 로 AI가 같은 검색 엔진을 사용. 창을 띄우지 않고 런처 화면을 흉내 낸 마크다운으로 답함 |
 | 자동 업데이트 | `update` (또는 `업데이트`) 를 치고 Enter: GitHub 최신 릴리스를 받아 서명을 확인한 뒤 교체하고 다시 시작하며, 이전 파일은 새 버전이 지움 |
+| 진행 표시줄 | 번역 엔진 설치, 언어 모델 다운로드, 업데이트 다운로드, 앱 목록과 Everything 파일 색인을 결과 아래 얇은 막대로 표시. 양을 알 수 있으면 백분율, 모르면 흐르는 막대 |
 | 설치할 것 없음 | exe 하나에 .NET 런타임과 Everything이 들어 있음. 번역 엔진은 처음 번역할 때 스스로 설치 |
 
 한국어 사용자를 위한 기능:
@@ -22,13 +23,28 @@ Windows용 Spotlight 스타일 런처입니다. **Alt+Space** 를 누르면 화�
 - 한/영 전환을 잊고 친 입력 복구: `rPtksrl` → 계산기, `qmffnxntm` → Bluetooth 설정, `ㅍㄴ챙ㄷ` → VS Code (Caps Lock이 켜져 있어도 됨)
 - 설정과 명령을 한국어로: `해상도`, `블루투스`, `환경 변수`, `잠금`, `시스템 종료`
 
+## 권장 사양
+
+| 항목 | 최소 | 권장 |
+|---|---|---|
+| OS | Windows 10 (1809 이상) 64비트 | Windows 11 64비트 |
+| CPU | x64 2코어 | x64 4코어 이상 (번역 속도에 영향) |
+| 메모리 | 4GB | 8GB 이상 |
+| 디스크 | 약 70MB (exe) | 약 1.2GB (번역 엔진 약 400MB, 언어 모델 약 700MB 포함) |
+| 파일 시스템 | NTFS (Everything 색인) | NTFS SSD |
+| 네트워크 | 필요 없음 | 번역 엔진 첫 설치, 언어 모델 다운로드, 환율, 업데이트 때만 사용 |
+
+- 메모리 사용량은 Quicklight 약 200MB, Everything은 색인한 파일 수에 따라 수십 MB에서 수백 MB입니다. 번역을 쓰면 LibreTranslate 서버가 1–2GB를 더 씁니다. 번역을 끄면(`translation: false`) 이 메모리와 디스크는 쓰지 않습니다.
+- Everything 서비스를 처음 설치할 때 관리자 권한 확인(UAC)이 한 번 필요합니다.
+- ARM64 Windows에서는 x64 에뮬레이션으로 실행됩니다.
+
 ## 설치
 
 결과물은 `Quicklight.exe` 파일 하나입니다 (약 66MB). 다른 PC에서도 이 파일만 있으면 실행됩니다.
 
 - **.NET 런타임**: exe 안에 들어 있습니다.
 - **Everything (파일 검색)**: exe 안에 들어 있습니다 (voidtools, MIT 라이선스). Everything이 이미 설치된 PC에서는 그것을 씁니다. 없으면 처음 실행할 때 설치할지 묻고, 설치하면 관리자 권한 확인(UAC)이 한 번 나옵니다. NTFS 색인을 읽는 Everything 서비스가 관리자 권한을 필요로 하기 때문입니다. 설치 위치는 `C:\Program Files\Quicklight\Everything` 입니다. 서비스 파일을 사용자 폴더에 두면 다른 프로그램이 바꿔치기해 관리자 권한을 얻을 수 있어서 이 위치에 둡니다. 거절하면 파일 검색 없이 실행되고, 트레이 메뉴에서 나중에 설치할 수 있습니다.
-- **번역 엔진 (LibreTranslate)**: 언어 모델까지 약 1GB라 exe에 넣지 않았습니다. 처음 번역할 때 Python(python.org 공식 NuGet 패키지, SHA-256 검증)과 LibreTranslate를 `%LOCALAPPDATA%\Quicklight\translate` 에 자동으로 설치하고 언어 모델을 받습니다. 그동안 결과에 진행 상황이 표시됩니다.
+- **번역 엔진 (LibreTranslate)**: 언어 모델까지 약 1GB라 exe에 넣지 않았습니다. 처음 번역할 때 Python(python.org 공식 NuGet 패키지, SHA-256 검증)과 LibreTranslate를 `%LOCALAPPDATA%\Quicklight\translate` 에 자동으로 설치하고 언어 모델을 받습니다. 그동안 결과 아래에 진행 막대가 표시됩니다.
 
 ```bat
 publish.bat 0.2.0                                      :: 테스트 후 버전 0.2.0 으로 dist\Quicklight.exe 를 만들고, 서명해서 dist\Quicklight_v0.2.0.zip 으로 묶음
@@ -44,7 +60,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1   :: %LOCALAPPDATA%\Program
 
 런처에 `update` 또는 `업데이트` 를 치면 GitHub `KusBeoms/Quicklight` 의 최신 릴리스를 확인해 행에 보여 줍니다. 예: "새 버전 v0.2.0 있음 · Enter로 내려받아 설치하고 다시 시작". 확인할 저장소는 설정의 `updateRepository` 로 바꿀 수 있습니다. 새 버전이 있을 때 Enter를 누르면 다음 순서로 진행됩니다.
 
-1. 릴리스의 `Quicklight_v0.2.0.zip` 같은 zip을 받습니다. 진행률이 표시되고, Esc로 취소할 수 있습니다.
+1. 릴리스의 `Quicklight_v0.2.0.zip` 같은 zip을 받습니다. 진행률이 결과 아래 막대로 표시되고, Esc로 취소할 수 있습니다.
 2. zip 안의 `Quicklight.exe` 가 **릴리스 키로 서명되었는지** `Quicklight.exe.sig` 로 확인합니다. 서명이 없거나 맞지 않으면 설치하지 않습니다. GitHub 계정이 탈취되어도 서명 키 없이는 업데이트를 퍼뜨릴 수 없습니다.
 3. 서명된 exe 안의 버전이 지금 버전보다 새로운지 확인합니다. 태그만 바꿔 예전 빌드를 올리는 식의 버전 되돌리기도 막습니다.
 4. 실행 중인 exe와 바꾸고 새 버전을 실행합니다. 새 버전은 이전 파일을 지웁니다. 새 버전이 실행되지 않으면 원래 파일로 되돌립니다.
@@ -70,6 +86,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1   :: %LOCALAPPDATA%\Program
 | Ctrl+Enter | 탐색기에서 파일 위치 열기 |
 | Ctrl+Shift+C | 경로 복사 |
 | 우클릭 | 열기, 관리자 권한으로 실행, 파일 탐색기에서 열기, 경로 복사 |
+| Alt+. | Everything 설정 창 열기 (색인할 폴더와 드라이브, 제외 목록 등) |
 | Esc | 입력 지우기, 한 번 더 누르면 닫기 |
 
 - 시스템 종료, 다시 시작, 로그아웃, 휴지통 비우기는 Enter를 두 번 눌러야 실행되고, 이름을 거의 다 입력해야 결과에 나옵니다.
