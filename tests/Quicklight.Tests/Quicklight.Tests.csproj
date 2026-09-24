@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+    <!-- Pinned above the vulnerable 4.3.0 versions the test packages pull in transitively. -->
+    <PackageReference Include="System.Net.Http" Version="4.3.4" />
+    <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Quicklight.Core\Quicklight.Core.csproj" />
+    <ProjectReference Include="..\..\src\Quicklight.Mcp\Quicklight.Mcp.csproj" />
+    <!-- Built first so the stdio test can start Quicklight.exe in mcp mode; not referenced as an assembly. -->
+    <ProjectReference Include="..\..\src\Quicklight\Quicklight.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

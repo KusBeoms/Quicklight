@@ -1,0 +1,264 @@
+<Window x:Class="Quicklight.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Quicklight"
+        Title="Quicklight" Width="768" SizeToContent="Height"
+        WindowStyle="None" AllowsTransparency="True" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
+        Background="Transparent" FontFamily="{StaticResource UiFont}"
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
+
+    <Window.Resources>
+        <CollectionViewSource x:Key="GroupedResults">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="Group" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
+        <CollectionViewSource x:Key="GroupedApps">
+            <CollectionViewSource.GroupDescriptions>
+                <PropertyGroupDescription PropertyName="Group" />
+            </CollectionViewSource.GroupDescriptions>
+        </CollectionViewSource>
+
+        <Style x:Key="RowStyle" TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="10,1" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bg" CornerRadius="12" Background="Transparent" Padding="10,6">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource HoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource SelectedTextBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TileStyle" TargetType="ListBoxItem" BasedOn="{StaticResource RowStyle}">
+            <Setter Property="Margin" Value="2" />
+            <Setter Property="Width" Value="96" />
+            <Setter Property="Height" Value="94" />
+        </Style>
+
+        <!-- Icon or glyph tile, shared by rows and the app grid. -->
+        <DataTemplate x:Key="IconTemplate">
+            <Grid>
+                <Border CornerRadius="8" Background="{DynamicResource GlyphBackBrush}">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasIcon}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource IconFont}" FontSize="16"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <Image Source="{Binding Icon}" RenderOptions.BitmapScalingMode="HighQuality" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="ResultTemplate">
+            <Grid Height="38">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="32" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource IconTemplate}" Width="30" Height="30" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="FontSize" Value="14.5" />
+                                <Style.Triggers>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <TextBlock Text="{Binding Subtitle}" FontSize="11.5" Opacity="0.68" TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
+                </StackPanel>
+                <TextBlock Grid.Column="2" x:Name="Hint" Text="↵" FontSize="14" Opacity="0" VerticalAlignment="Center" Margin="0,0,4,0" />
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                    <Setter TargetName="Hint" Property="Opacity" Value="0.85" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- Direct answers (calculator, currency, translation) as a large card. -->
+        <DataTemplate x:Key="HeroTemplate">
+            <Grid Margin="4,8,4,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource IconTemplate}" Width="36" Height="36" VerticalAlignment="Top" Margin="0,4,0,0" />
+                <StackPanel Grid.Column="1" Margin="16,0,12,0">
+                    <TextBlock Text="{Binding Title}" FontSize="{Binding HeroFontSize}" FontWeight="SemiBold" TextWrapping="Wrap"
+                               TextTrimming="CharacterEllipsis" MaxHeight="190" LineStackingStrategy="MaxHeight" />
+                    <TextBlock Text="{Binding Subtitle}" FontSize="12.5" Opacity="0.72" TextWrapping="Wrap" Margin="0,6,0,0" />
+                </StackPanel>
+                <TextBlock Grid.Column="2" Text="{Binding HeroHint}" FontSize="12" Opacity="0.8" VerticalAlignment="Top" Margin="0,8,4,0" />
+            </Grid>
+        </DataTemplate>
+
+        <local:ResultTemplateSelector x:Key="ResultSelector" Row="{StaticResource ResultTemplate}" Hero="{StaticResource HeroTemplate}" />
+
+        <DataTemplate x:Key="TileTemplate">
+            <StackPanel VerticalAlignment="Top" Margin="0,2,0,0">
+                <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource IconTemplate}" Width="44" Height="44" HorizontalAlignment="Center" />
+                <TextBlock Text="{Binding Title}" FontSize="11.5" TextAlignment="Center" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                           MaxHeight="31" Margin="0,5,0,0" LineStackingStrategy="BlockLineHeight" LineHeight="15" />
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="GroupHeader">
+            <TextBlock Text="{Binding Name}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource HeaderBrush}" Margin="22,8,0,3" />
+        </DataTemplate>
+
+        <!-- Right-click menu, drawn to match the panel. -->
+        <Style TargetType="ContextMenu">
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="HasDropShadow" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="{DynamicResource MenuBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                                CornerRadius="12" Padding="5" Margin="0,0,12,12">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.3" Direction="270" />
+                            </Border.Effect>
+                            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="MenuItem">
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="Bg" CornerRadius="8" Padding="10,7" MinWidth="200" Background="Transparent">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="26" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter ContentSource="Icon" VerticalAlignment="Center" />
+                                <ContentPresenter Grid.Column="1" ContentSource="Header" VerticalAlignment="Center" RecognizesAccessKey="False" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource SelectedTextBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- The margin leaves room for the drop shadow. Opacity, scale and blur are animated on show and hide. -->
+    <Grid x:Name="Shell" Margin="24" RenderTransformOrigin="0.5,0.25">
+        <Grid.RenderTransform>
+            <ScaleTransform x:Name="ShellScale" ScaleX="1" ScaleY="1" />
+        </Grid.RenderTransform>
+
+        <Border x:Name="ShadowShape" Background="{DynamicResource SolidPanelBrush}" CornerRadius="31">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="30" ShadowDepth="8" Opacity="0.38" Direction="270" />
+            </Border.Effect>
+        </Border>
+
+        <Grid x:Name="Panel" SizeChanged="Panel_SizeChanged">
+            <!-- A blurred snapshot of the screen behind the window: acrylic that works with any corner radius.
+                 On a Canvas so the (larger) snapshot never takes part in sizing the panel. -->
+            <Canvas IsHitTestVisible="False">
+                <Image x:Name="Backdrop" Stretch="None">
+                    <Image.Effect>
+                        <BlurEffect Radius="40" KernelType="Gaussian" RenderingBias="Performance" />
+                    </Image.Effect>
+                </Image>
+            </Canvas>
+            <Border x:Name="Tint" Background="{DynamicResource PanelBrush}" />
+
+            <StackPanel>
+                <Grid Height="62" Margin="24,0,22,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="20" Opacity="0.7"
+                               Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,14,0" />
+                    <TextBlock Grid.Column="1" x:Name="Placeholder" Text="Quicklight 검색" FontSize="22" IsHitTestVisible="False"
+                               Foreground="{DynamicResource PlaceholderBrush}" VerticalAlignment="Center" Margin="2,0,0,0" />
+                    <TextBox Grid.Column="1" x:Name="Query" FontSize="22" BorderThickness="0" Background="Transparent"
+                             Foreground="{DynamicResource TextBrush}" CaretBrush="{DynamicResource TextBrush}"
+                             SelectionBrush="{DynamicResource AccentBrush}" VerticalAlignment="Center"
+                             TextChanged="Query_TextChanged" PreviewKeyDown="Query_PreviewKeyDown"
+                             InputMethod.PreferredImeState="DoNotCare" />
+                    <TextBlock Grid.Column="2" x:Name="Status" FontSize="11.5" Foreground="{DynamicResource SubtleTextBrush}"
+                               VerticalAlignment="Center" Margin="12,0,0,0" />
+                </Grid>
+
+                <Border x:Name="Separator" Height="1" Background="{DynamicResource SeparatorBrush}" Visibility="Collapsed" />
+
+                <ListBox x:Name="Results" ItemsSource="{Binding Source={StaticResource GroupedResults}}"
+                         ItemTemplateSelector="{StaticResource ResultSelector}" ItemContainerStyle="{StaticResource RowStyle}"
+                         Background="Transparent" BorderThickness="0" Padding="0,4,0,6" MaxHeight="500" Visibility="Collapsed"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                         VirtualizingPanel.IsVirtualizing="False" Focusable="False" KeyboardNavigation.TabNavigation="None"
+                         PreviewMouseLeftButtonDown="List_PreviewMouseLeftButtonDown" PreviewMouseRightButtonUp="List_PreviewMouseRightButtonUp">
+                    <ListBox.GroupStyle>
+                        <GroupStyle HeaderTemplate="{StaticResource GroupHeader}" />
+                    </ListBox.GroupStyle>
+                </ListBox>
+
+                <!-- Every installed app, sorted and sectioned by initial ("앱", "app", "프로그램", ...). -->
+                <ListBox x:Name="AppGrid" ItemsSource="{Binding Source={StaticResource GroupedApps}}"
+                         ItemTemplate="{StaticResource TileTemplate}" ItemContainerStyle="{StaticResource TileStyle}"
+                         Background="Transparent" BorderThickness="0" Padding="0,4,0,8" Height="470" Visibility="Collapsed"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                         VirtualizingPanel.IsVirtualizing="False" Focusable="False" KeyboardNavigation.TabNavigation="None"
+                         PreviewMouseLeftButtonDown="List_PreviewMouseLeftButtonDown" PreviewMouseRightButtonUp="List_PreviewMouseRightButtonUp">
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Width="700" HorizontalAlignment="Center" />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.GroupStyle>
+                        <GroupStyle HeaderTemplate="{StaticResource GroupHeader}" />
+                    </ListBox.GroupStyle>
+                </ListBox>
+
+                <Border x:Name="Footer" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SeparatorBrush}" Padding="24,8" Visibility="Collapsed">
+                    <TextBlock x:Name="FooterText" FontSize="11.5" Foreground="{DynamicResource SubtleTextBrush}" TextTrimming="CharacterEllipsis" />
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <Border x:Name="Outline" CornerRadius="31" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" IsHitTestVisible="False" />
+    </Grid>
+</Window>

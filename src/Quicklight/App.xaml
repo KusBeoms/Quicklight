@@ -1,0 +1,9 @@
+<Application x:Class="Quicklight.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+        <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI, Malgun Gothic</FontFamily>
+    </Application.Resources>
+</Application>

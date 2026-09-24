@@ -1,0 +1,89 @@
+using System.ComponentModel;
+using System.Windows.Media;
+using Quicklight.Core.Models;
+
+namespace Quicklight;
+
+/// <summary>A result row. <see cref="Group"/> drives the Spotlight-style section headers.</summary>
+public sealed class ResultItem(SearchResult result, string group) : INotifyPropertyChanged
+{
+    public SearchResult Result { get; } = result;
+    public string Group { get; } = group;
+    public string Title => Result.Title;
+    public string Subtitle => _subtitleOverride ?? Result.Subtitle;
+    public string Glyph => GlyphFor(Result);
+    /// <summary>A direct answer on top (calculation, conversion, translation) is drawn as a large card.</summary>
+    public bool IsHero => Group == HeroGroup && Result.Kind is ResultKind.Calculator or ResultKind.Currency or ResultKind.Translation
+                          && Result.Action != ActionType.None;
+
+    public const string HeroGroup = "최상위 결과";
+
+    /// <summary>Numbers are short and get the biggest type; translations shrink with their length.</summary>
+    public double HeroFontSize => Result.Kind == ResultKind.Translation
+        ? Title.Length switch { <= 24 => 28, <= 60 => 23, <= 140 => 19, _ => 16 }
+        : 34;
+
+    /// <summary>What Enter does on the card.</summary>
+    public string HeroHint => "↵ 복사";
+
+    string? _subtitleOverride;
+    ImageSource? _icon;
+
+    public ImageSource? Icon
+    {
+        get => _icon;
+        set { _icon = value; Changed(nameof(Icon)); Changed(nameof(HasIcon)); }
+    }
+
+    public bool HasIcon => _icon is not null;
+
+    /// <summary>Shown instead of the subtitle while a destructive command waits for its second Enter.</summary>
+    public void SetSubtitleOverride(string? text)
+    {
+        _subtitleOverride = text;
+        Changed(nameof(Subtitle));
+    }
+
+    public static string KindLabel(ResultKind k) => k switch
+    {
+        ResultKind.Calculator => "계산기",
+        ResultKind.Currency => "환율",
+        ResultKind.Translation => "번역",
+        ResultKind.Url => "웹사이트",
+        ResultKind.Path => "경로",
+        ResultKind.App => "앱",
+        ResultKind.Setting => "설정",
+        ResultKind.Command => "명령",
+        ResultKind.Folder => "폴더",
+        ResultKind.File => "문서",
+        ResultKind.WebSearch => "웹 검색",
+        _ => k.ToString(),
+    };
+
+    static string GlyphFor(SearchResult r) => r.Kind switch
+    {
+        ResultKind.Calculator => "",
+        ResultKind.Currency => "",
+        ResultKind.Translation => "",
+        ResultKind.Url => "",
+        ResultKind.WebSearch => "",
+        ResultKind.Setting => "",
+        ResultKind.Folder => "",
+        ResultKind.File => "",
+        ResultKind.Path => "",
+        ResultKind.App => "",
+        ResultKind.Command => r.Target switch
+        {
+            "lock" => "",
+            "sleep" or "hibernate" => "",
+            "restart" => "",
+            "signout" => "",
+            "recyclebin" => "",
+            _ => "",
+        },
+        _ => "",
+    };
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    void Changed(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- MCP server library, hosted by Quicklight.exe in mcp mode. -->
+  <PropertyGroup>
+    <RootNamespace>Quicklight.Mcp</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Quicklight.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Quicklight.Core\Quicklight.Core.csproj" />
+  </ItemGroup>
+</Project>

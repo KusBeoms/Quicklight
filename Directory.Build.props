@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Version>0.1.0</Version>
+    <Authors>kusbeoms</Authors>
+    <SatelliteResourceLanguages>ko;en</SatelliteResourceLanguages>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,10 @@
+.omc/
+.claude/
+.vscode/
+bin/
+obj/
+dist/
+*.user
+.vs/
+TestResults/
+.library/
