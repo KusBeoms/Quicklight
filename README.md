@@ -5,7 +5,7 @@ Windows용 Spotlight 스타일 런처입니다. **Alt+Space** 를 누르면 화�
 | PowerToys Run과 다른 점 | 구현 |
 |---|---|
 | 접두 기호 없이 최적의 결과 | 모든 공급자(앱, 파일, 설정, 명령, 계산기, URL, 경로, 웹 검색)를 한꺼번에 조회하고 하나의 점수 체계로 정렬. 고른 결과를 기억해서 같은 검색어나 그 앞부분을 다시 치면 위로 올림 |
-| Everything 색인으로 파일 검색 | SDK DLL 없이 Everything IPC(WM_COPYDATA)를 직접 구현. 빠른 이름 앞부분 검색 결과를 먼저 보여 주고 전체 검색 결과로 이어서 채움 |
+| Everything 색인으로 파일, 폴더 검색 | SDK DLL 없이 Everything IPC(WM_COPYDATA)를 직접 구현. 빠른 이름 앞부분 검색 결과를 먼저 보여 주고 전체 검색 결과로 이어서 채움. 폴더는 따로 찾아서, 같은 이름의 파일이나 앱이 많아도 이름이 맞는 폴더가 결과에 남음 |
 | Spotlight처럼 간결한 UI | 빈 상태에서는 알약 모양 검색창, 결과가 나오면 둥근 패널. 흐린 배경, "최상위 결과"와 종류별 구역, 열고 닫을 때 흐림에서 초점이 잡히는 애니메이션(모니터 주사율에 맞춰 120/144/240Hz로 재생), 시스템 밝은/어두운 테마 |
 | 모든 앱 보기 | `앱`, `app`, `apps`, `application`, `애플리케이션`, `응용프로그램`, `프로그램` 을 입력하면 설치된 앱 전체를 이름순 그리드로 표시 (A–Z, ㄱ–ㅎ, # 구역. 제거 프로그램과 도움말 링크는 뺌) |
 | 우클릭 메뉴 | 열기, 관리자 권한으로 실행, 파일 탐색기에서 열기, 경로 복사 |
@@ -108,7 +108,8 @@ powershell -ExecutionPolicy Bypass -File install.ps1   :: %LOCALAPPDATA%\Program
 | `webSearchUrl` | Google | `{0}` 자리에 검색어가 들어감 |
 | `maxResults` | 12 | 표시할 최대 결과 수 |
 | `fileSearch` | true | Everything 파일 검색 |
-| `maxFileResults` | 6 | 결과 중 파일과 폴더의 최대 수 |
+| `maxFileResults` | 6 | 결과 중 파일의 최대 수 |
+| `maxFolderResults` | 4 | 결과 중 폴더의 최대 수. 이름이 맞는 폴더는 앱이나 파일이 많아도 3자리까지 보장 |
 | `demotedPaths` | AppData, node_modules 등 | 이 경로를 포함한 파일은 순위를 낮춤 |
 | `excludedPaths` | 없음 | 이 경로를 포함한 파일은 숨김 |
 | `currencyConversion` | true | 환전 결과 표시 |

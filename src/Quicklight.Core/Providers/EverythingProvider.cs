@@ -38,13 +38,21 @@ public sealed class EverythingProvider(EverythingClient client, QuicklightSettin
                     if (_prefixCache is { } c && c.Query == q && DateTime.UtcNow - c.At < PrefixCacheLifetime) prefix = c.Items;
                 if (prefix is null)
                 {
-                    prefix = await client.SearchAsync(new EverythingQuery($"startwith:\"{q.Replace("\"", "")}\"", 40, EverythingSort.NameAscending), ct).ConfigureAwait(false);
+                    var start = $"startwith:\"{q.Replace("\"", "")}\"";
+                    var any = await client.SearchAsync(new EverythingQuery(start, 40, EverythingSort.NameAscending), ct).ConfigureAwait(false);
+                    // Folders get their own candidates: among thousands of same-named files (desktop.ini, src\...)
+                    // they would rarely make the first 40. Folder-only queries are fast (far fewer folders than files).
+                    var folderItems = await client.SearchAsync(new EverythingQuery("folder: " + start, 20, EverythingSort.NameAscending), ct).ConfigureAwait(false);
+                    prefix = [.. any, .. folderItems];
                     lock (_cacheGate) _prefixCache = (q, prefix, DateTime.UtcNow);
                 }
                 sets.Add(prefix);
             }
             if (raw || query.Files == FileStage.Full)
+            {
                 sets.Add(await client.SearchAsync(new EverythingQuery(q, 60, EverythingSort.DateModifiedDescending), ct).ConfigureAwait(false));
+                if (!raw) sets.Add(await client.SearchAsync(new EverythingQuery("folder: " + q, 30, EverythingSort.DateModifiedDescending), ct).ConfigureAwait(false));
+            }
         }
         catch (Exception ex) when (ex is EverythingUnavailableException or TimeoutException)
         {
@@ -61,7 +69,8 @@ public sealed class EverythingProvider(EverythingClient client, QuicklightSettin
             if (full.Contains(@"\Start Menu\Programs\", StringComparison.OrdinalIgnoreCase) && full.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)) continue;
 
             double m = raw ? 60 : FuzzyMatcher.Score(q, item.Name);
-            if (m < query.MinMatch)
+            bool nameMatch = raw || m >= query.MinMatch;
+            if (!nameMatch)
             {
                 // Everything matched something the fuzzy matcher did not (e.g. a multi-word hit across the path).
                 if (query.IsAlternate) continue;
@@ -77,10 +86,45 @@ public sealed class EverythingProvider(EverythingClient client, QuicklightSettin
                 RevealPath = full,
                 Modified = item.Modified,
                 Size = item.Size >= 0 ? item.Size : null,
+                NameMatch = nameMatch,
+                IsSystem = item.IsSystem,
                 Score = Score(m, item, full, now),
             };
         }
-        return byPath.Values.OrderByDescending(r => r.Score).Take(Math.Max(settings.MaxFileResults * 3, 12)).ToList();
+
+        // System (hidden/system-attribute) files and folders are noise to most people ($RECYCLE.BIN, System Volume
+        // Information, ...): left out by default, one at a time via "system-folders"/"system-files" placeholder
+        // rows (Enter re-runs the search with QueryContext.ExpandSystemFolders/Files set).
+        var all = byPath.Values;
+        var files = Partition(all, ResultKind.File, query.ExpandSystemFiles, "시스템 파일", "system-files", settings.MaxFileResults);
+        var folders = Partition(all, ResultKind.Folder, query.ExpandSystemFolders, "시스템 폴더", "system-folders", settings.MaxFolderResults);
+        return [.. files, .. folders];
+    }
+
+    /// <summary>Normal (non-system) items of <paramref name="kind"/>, capped and ranked, plus a placeholder for the system ones when not expanded.</summary>
+    static List<SearchResult> Partition(IEnumerable<SearchResult> all, ResultKind kind, bool expand,
+        string summaryTitle, string summaryTarget, int cap)
+    {
+        var ofKind = all.Where(r => r.Kind == kind).ToList();
+        var normal = ofKind.Where(r => !r.IsSystem).OrderByDescending(r => r.Score).Take(Math.Max(cap * 3, 12)).ToList();
+        if (expand)
+        {
+            normal.AddRange(ofKind.Where(r => r.IsSystem).OrderByDescending(r => r.Score));
+            return normal;
+        }
+        int systemCount = ofKind.Count(r => r.IsSystem);
+        if (systemCount > 0)
+            normal.Add(new SearchResult
+            {
+                Title = summaryTitle,
+                Subtitle = $"{systemCount}개 숨김 · Enter로 펼치기",
+                Kind = kind,
+                Target = summaryTarget,
+                Action = ActionType.Expand,
+                IsSystemSummary = true,
+                Score = 0,
+            });
+        return normal;
     }
 
     double Score(double match, EverythingItem item, string full, DateTime now)

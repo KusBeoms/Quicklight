@@ -16,9 +16,14 @@ public enum EverythingSort : uint
     DateRunDescending = 26,
 }
 
-public sealed record EverythingItem(string Name, string Directory, bool IsFolder, long Size, DateTime? Modified)
+public sealed record EverythingItem(string Name, string Directory, bool IsFolder, long Size, DateTime? Modified, uint Attributes = 0)
 {
     public string FullPath => string.IsNullOrEmpty(Directory) ? Name : System.IO.Path.Combine(Directory, Name);
+
+    const uint FileAttributeHidden = 0x2, FileAttributeSystem = 0x4;
+
+    /// <summary>Windows hidden or system attribute: what Explorer itself calls "system files" and hides by default.</summary>
+    public bool IsSystem => (Attributes & (FileAttributeHidden | FileAttributeSystem)) != 0;
 }
 
 public sealed record EverythingQuery(string Search, int MaxResults = 50, EverythingSort Sort = EverythingSort.NameAscending,
@@ -35,7 +40,7 @@ public sealed class EverythingClient : IDisposable
     const uint ReplyIdBase = 0x514C_0000; // + a sequence number, echoed back by Everything
 
     const uint SearchFlagMatchCase = 0x1, SearchFlagMatchPath = 0x4, SearchFlagRegex = 0x8;
-    const uint RequestName = 0x1, RequestPath = 0x2, RequestSize = 0x10, RequestDateModified = 0x40;
+    const uint RequestName = 0x1, RequestPath = 0x2, RequestSize = 0x10, RequestDateModified = 0x40, RequestAttributes = 0x100;
     const uint ItemFolder = 0x1, ItemDrive = 0x2;
 
     readonly ConcurrentQueue<Request> _queue = new();
@@ -196,7 +201,7 @@ public sealed class EverythingClient : IDisposable
         BitConverter.TryWriteBytes(buf.AsSpan(8), flags);
         BitConverter.TryWriteBytes(buf.AsSpan(12), 0u);
         BitConverter.TryWriteBytes(buf.AsSpan(16), (uint)Math.Clamp(q.MaxResults, 1, 1000));
-        BitConverter.TryWriteBytes(buf.AsSpan(20), RequestName | RequestPath | RequestSize | RequestDateModified);
+        BitConverter.TryWriteBytes(buf.AsSpan(20), RequestName | RequestPath | RequestSize | RequestDateModified | RequestAttributes);
         BitConverter.TryWriteBytes(buf.AsSpan(24), (uint)q.Sort);
         search.CopyTo(buf, 28);
 
@@ -289,11 +294,13 @@ public sealed class EverythingClient : IDisposable
                 long ft = BitConverter.ToInt64(span[p..]); p += 8;
                 if (ft > 0 && ft != -1) { try { modified = DateTime.FromFileTime(ft); } catch (ArgumentOutOfRangeException) { } }
             }
+            uint attributes = 0;
+            if ((requestFlags & RequestAttributes) != 0) { attributes = BitConverter.ToUInt32(span[p..]); p += 4; }
 
             bool isFolder = (itemFlags & (ItemFolder | ItemDrive)) != 0;
             // Drives come back as name "C:" with an empty path.
             if ((itemFlags & ItemDrive) != 0 && !name.EndsWith('\\')) name += "\\";
-            items.Add(new EverythingItem(name, path, isFolder, isFolder ? -1 : size, modified));
+            items.Add(new EverythingItem(name, path, isFolder, isFolder ? -1 : size, modified, attributes));
             }
             catch (ArgumentOutOfRangeException) { break; } // truncated or malformed item
         }

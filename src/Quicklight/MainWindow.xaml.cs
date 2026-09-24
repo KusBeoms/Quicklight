@@ -253,7 +253,7 @@ public partial class MainWindow : Window
         _ = RunSearchAsync(Query.Text);
     }
 
-    async Task RunSearchAsync(string text)
+    async Task RunSearchAsync(string text, bool expandSystemFolders = false, bool expandSystemFiles = false)
     {
         // Safe to dispose right after Cancel: the previous search only ever checks an already-cancelled token.
         _cts?.Cancel();
@@ -269,7 +269,8 @@ public partial class MainWindow : Window
         try
         {
             // Instant providers first; files slot in as Everything answers (fast name-prefix pass, then the full pass).
-            var fast = await _engine.SearchAsync(text, ct: token, files: FileStage.None);
+            var fast = await _engine.SearchAsync(text, ct: token, files: FileStage.None,
+                expandSystemFolders: expandSystemFolders, expandSystemFiles: expandSystemFiles);
             if (token.IsCancellationRequested) return;
             Render(fast, keepSelection: false);
             // Later passes bring files and translations; skip them only when neither can contribute.
@@ -279,7 +280,8 @@ public partial class MainWindow : Window
             IReadOnlyList<SearchResult> results = fast;
             foreach (var stage in new[] { FileStage.Prefix, FileStage.Full })
             {
-                results = await _engine.SearchAsync(text, ct: token, files: stage);
+                results = await _engine.SearchAsync(text, ct: token, files: stage,
+                    expandSystemFolders: expandSystemFolders, expandSystemFiles: expandSystemFiles);
                 if (token.IsCancellationRequested) return;
                 Render(results, keepSelection: true);
             }
@@ -289,7 +291,8 @@ public partial class MainWindow : Window
                 _engine.Translator is { IsReady: false } translator &&
                 await translator.EnsureReadyAsync(TimeSpan.FromMinutes(20), token) && !token.IsCancellationRequested)
             {
-                results = await _engine.SearchAsync(text, ct: token, files: FileStage.Full);
+                results = await _engine.SearchAsync(text, ct: token, files: FileStage.Full,
+                    expandSystemFolders: expandSystemFolders, expandSystemFiles: expandSystemFiles);
                 if (!token.IsCancellationRequested) Render(results, keepSelection: true);
             }
         }
@@ -514,6 +517,13 @@ public partial class MainWindow : Window
         var r = item.Result;
         if (r.Action == ActionType.None) return; // informational row ("translating…")
         if (r.Action == ActionType.Update) { _ = RunUpdateAsync(); return; }
+        if (r.Action == ActionType.Expand)
+        {
+            bool expandFolders = r.Kind == ResultKind.Folder;
+            HideLauncher();
+            _ = ShowAndSearchExpandedAsync(_lastQuery, expandFolders, !expandFolders);
+            return;
+        }
         if (r.RequiresConfirmation && _armedKey != r.Key)
         {
             Disarm();
@@ -533,6 +543,12 @@ public partial class MainWindow : Window
         _engine.RecordSelection(_lastQuery, r);
         try { SearchEngine.Execute(r); }
         catch (Exception ex) { ShowError("실행하지 못했습니다", r.Target, ex); }
+    }
+
+    async Task ShowAndSearchExpandedAsync(string query, bool folders, bool files)
+    {
+        ShowLauncher();
+        await RunSearchAsync(query, folders, files);
     }
 
     void RunAsAdmin(ResultItem item, string path)
@@ -674,6 +690,7 @@ public partial class MainWindow : Window
         }
         if (r.Action == ActionType.None) { FooterText.Text = "Esc  닫기"; return; }
         if (r.Action == ActionType.Update) { FooterText.Text = "↵  다시 확인      Esc  취소 / 닫기"; return; }
+        if (r.Action == ActionType.Expand) { FooterText.Text = "↵  시스템 항목 펼치기      Esc  닫기"; return; }
         string enter = r.Action switch
         {
             ActionType.Copy => "결과 복사",

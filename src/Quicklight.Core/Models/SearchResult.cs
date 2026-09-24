@@ -27,6 +27,8 @@ public enum ActionType
     None,
     /// <summary>Check GitHub Releases and install a newer Quicklight (handled by the launcher).</summary>
     Update,
+    /// <summary>Re-runs the search including the system files/folders it left out (handled by the launcher).</summary>
+    Expand,
 }
 
 public sealed class SearchResult
@@ -53,6 +55,18 @@ public sealed class SearchResult
     public string? RevealPath { get; init; }
 
     public double Score { get; set; }
+
+    /// <summary>Files and folders: the query matched the name itself, not only somewhere in the path.</summary>
+    public bool NameMatch { get; init; }
+
+    /// <summary>A file or folder with Windows' hidden or system attribute (what Explorer calls "system files").</summary>
+    public bool IsSystem { get; init; }
+
+    /// <summary>
+    /// The "시스템 폴더"/"시스템 파일" placeholder row standing in for system files/folders left out of the results;
+    /// Enter on it (<see cref="ActionType.Expand"/>) reruns the search with them included. Always sorts last.
+    /// </summary>
+    public bool IsSystemSummary { get; init; }
 
     public DateTime? Modified { get; init; }
     public long? Size { get; init; }

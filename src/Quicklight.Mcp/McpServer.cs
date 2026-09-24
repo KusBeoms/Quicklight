@@ -174,6 +174,8 @@ public sealed class McpServer(SearchEngine engine, EverythingClient? everything,
             if (r.Modified is { } m) o["modified"] = m.ToString("yyyy-MM-dd HH:mm");
             if (r.Size is { } sz) o["size"] = sz;
             if (r.RequiresConfirmation) o["destructive"] = true;
+            if (r.IsSystem) o["is_system"] = true;
+            if (r.IsSystemSummary) o["is_system_summary"] = true;
             items.Add(o);
         }
         return ToolResult(new JsonObject { ["query"] = query, ["results"] = items }, McpMarkdown.Search(query, results));

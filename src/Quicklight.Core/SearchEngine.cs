@@ -106,14 +106,16 @@ public sealed class SearchEngine : IDisposable
     }
 
     /// <param name="files">File search depth. The launcher paints <see cref="FileStage.None"/> first, then Prefix, then Full.</param>
+    /// <param name="expandSystemFolders">Show system (hidden/system-attribute) folders instead of the "시스템 폴더" placeholder.</param>
+    /// <param name="expandSystemFiles">Show system (hidden/system-attribute) files instead of the "시스템 파일" placeholder.</param>
     public async Task<IReadOnlyList<SearchResult>> SearchAsync(string text, int? maxResults = null, CancellationToken ct = default,
-        ISet<ResultKind>? kinds = null, FileStage files = FileStage.Full)
+        ISet<ResultKind>? kinds = null, FileStage files = FileStage.Full, bool expandSystemFolders = false, bool expandSystemFiles = false)
     {
         var query = text.Trim();
         if (query.Length == 0) return [];
         int max = maxResults ?? _settings.MaxResults;
 
-        var contexts = new List<QueryContext> { new(query, Files: files) };
+        var contexts = new List<QueryContext> { new(query, Files: files, ExpandSystemFolders: expandSystemFolders, ExpandSystemFiles: expandSystemFiles) };
         var alt = Hangul.QwertyToHangul(query) ?? Hangul.HangulToQwerty(query);
         // The layout-converted retry skips Everything: another round-trip per keystroke costs more than it finds.
         if (alt is not null && alt != query) contexts.Add(new QueryContext(alt, IsAlternate: true, Files: FileStage.None));
@@ -135,19 +137,51 @@ public sealed class SearchEngine : IDisposable
                 merged[r.Key] = r;
         }
 
-        // Web search is always offered and always last, in the last slot (unless there is only one slot).
         merged.TryGetValue(WebSearchProvider.Make(query, _settings).Key, out var web);
+        return Rank(merged.Values, web, max, _settings);
+    }
+
+    /// <summary>Folders whose name matches keep this many slots even when apps and files outrank them.</summary>
+    const int ReservedFolderSlots = 3;
+
+    /// <summary>
+    /// Picks the final list: best first, files and folders capped separately, a few slots kept for folders whose
+    /// name matches (otherwise apps and recent files would crowd out "Downloads" or "Project"), web search last.
+    /// </summary>
+    internal static List<SearchResult> Rank(IEnumerable<SearchResult> candidates, SearchResult? web, int max, QuicklightSettings settings)
+    {
+        // Web search is always offered and always last, in the last slot (unless there is only one slot).
         bool addWeb = web is not null && max > 1;
         int slots = max - (addWeb ? 1 : 0);
-        var ranked = new List<SearchResult>();
-        int fileCount = 0;
-        foreach (var r in merged.Values.OrderByDescending(r => r.Score).ThenBy(r => r.Title.Length))
+
+        // The "시스템 폴더"/"시스템 파일" placeholders always sort last (before web search), never competing for a
+        // slot with real results: skip them here and append after everything else is picked.
+        var summaries = candidates.Where(r => r.IsSystemSummary).ToList();
+        int summarySlots = Math.Min(summaries.Count, Math.Max(0, slots - 1)); // the top hit stays free
+
+        var ordered = candidates.Where(r => r.Kind != ResultKind.WebSearch && !r.IsSystemSummary)
+            .OrderByDescending(r => r.Score).ThenBy(r => r.Title.Length).ToList();
+
+        int maxFolders = Math.Max(0, settings.MaxFolderResults);
+        int othersSlots = slots - summarySlots;
+        var reserved = ordered.Where(r => r.Kind == ResultKind.Folder && r.NameMatch)
+            .Take(Math.Min(Math.Min(ReservedFolderSlots, maxFolders), Math.Max(0, othersSlots - 1))) // the top hit stays free
+            .ToHashSet();
+
+        var picked = new HashSet<SearchResult>(reserved);
+        int others = 0, files = 0, folders = reserved.Count;
+        foreach (var r in ordered)
         {
-            if (ranked.Count >= slots) break;
-            if (r.Kind == ResultKind.WebSearch) continue;
-            if (r.Kind is ResultKind.File or ResultKind.Folder && ++fileCount > _settings.MaxFileResults) continue;
-            ranked.Add(r);
+            if (others >= othersSlots - reserved.Count) break;
+            if (reserved.Contains(r)) continue;
+            if (r.Kind == ResultKind.File && ++files > settings.MaxFileResults) continue;
+            if (r.Kind == ResultKind.Folder && ++folders > maxFolders) continue;
+            picked.Add(r);
+            others++;
         }
+
+        var ranked = ordered.Where(picked.Contains).ToList(); // keep score order
+        ranked.AddRange(summaries.Take(summarySlots));
         if (addWeb) ranked.Add(web!);
         else if (ranked.Count == 0 && web is not null) ranked.Add(web);
         return ranked;

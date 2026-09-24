@@ -7,7 +7,10 @@ public enum FileStage { None, Prefix, Full }
 
 /// <param name="Text">Trimmed query as typed, or its keyboard-layout conversion when <paramref name="IsAlternate"/>.</param>
 /// <param name="IsAlternate">True for the Korean/English layout-converted retry; providers then require a strong match.</param>
-public sealed record QueryContext(string Text, bool IsAlternate = false, FileStage Files = FileStage.Full)
+/// <param name="ExpandSystemFolders">Show system (hidden/system-attribute) folders instead of the "시스템 폴더" placeholder.</param>
+/// <param name="ExpandSystemFiles">Show system (hidden/system-attribute) files instead of the "시스템 파일" placeholder.</param>
+public sealed record QueryContext(string Text, bool IsAlternate = false, FileStage Files = FileStage.Full,
+    bool ExpandSystemFolders = false, bool ExpandSystemFiles = false)
 {
     /// <summary>Minimum match score a provider should accept for fuzzy name matches.</summary>
     public double MinMatch => IsAlternate ? 72 : 50;

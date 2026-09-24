@@ -16,8 +16,14 @@ public sealed class QuicklightSettings
     /// <summary>Everything-backed file search.</summary>
     public bool FileSearch { get; set; } = true;
 
-    /// <summary>At most this many files/folders among the results.</summary>
+    /// <summary>At most this many files among the results.</summary>
     public int MaxFileResults { get; set; } = 6;
+
+    /// <summary>
+    /// At most this many folders among the results. Folders whose name matches keep up to 3 of these slots even
+    /// when apps and files score higher.
+    /// </summary>
+    public int MaxFolderResults { get; set; } = 4;
 
     /// <summary>Paths containing any of these fragments rank lower (not hidden).</summary>
     public List<string> DemotedPaths { get; set; } =
