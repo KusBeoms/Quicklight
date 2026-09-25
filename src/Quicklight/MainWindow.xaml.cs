@@ -24,7 +24,6 @@ public partial class MainWindow : Window
     const string TopHitGroup = ResultItem.HeroGroup;
     const double ShadowMargin = 24;      // DIPs around the panel, room for the drop shadow (matches Shell.Margin)
     const double MaxPanelHeight = 660;   // DIPs; the bar sits so that a fully expanded panel is centered on screen
-    const double PanelRadius = 28;       // corner radius once the panel expands; the bare search bar is a pill
     const double BackdropPad = 48;       // DIPs captured beyond the panel so the blur near its edges has real content
     const double BackdropBlur = 14;      // blur strength (Gaussian sigma) of the backdrop, in DIPs
 
@@ -530,7 +529,7 @@ public partial class MainWindow : Window
 
     void Panel_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateShape();
 
-    /// <summary>A pill while only the search bar shows, rounded corners once the panel expands.</summary>
+    /// <summary>The bar's pill curve, kept when the panel expands, so typing never reshapes the corners.</summary>
     void UpdateShape()
     {
         var size = Panel.RenderSize;
@@ -539,34 +538,7 @@ public partial class MainWindow : Window
         Canvas.SetLeft(Backdrop, _backdropLeft - (FullWidth - size.Width) / 2);
         bool lists = Results.Visibility == Visibility.Visible || IsGrid || _previewOpen;
         Separator.Visibility = lists ? Visibility.Visible : Visibility.Collapsed;
-        bool expanded = lists || AiPanel.Visibility == Visibility.Visible || ActivityPanel.Visibility == Visibility.Visible;
-        double target = expanded ? PanelRadius : SearchRow.Height / 2;
-        if (target != _radiusTarget)
-        {
-            // The corners ease between pill and panel instead of snapping when the first result appears.
-            _radiusTarget = target;
-            BeginAnimation(ShapeRadiusProperty, Anim(null, target, 300, Settle));
-        }
-        ApplyShape();
-    }
-
-    double _radiusTarget = double.NaN;
-
-    public static readonly DependencyProperty ShapeRadiusProperty = DependencyProperty.Register(
-        nameof(ShapeRadius), typeof(double), typeof(MainWindow), new PropertyMetadata(44.0, (d, _) => ((MainWindow)d).ApplyShape()));
-
-    /// <summary>Corner radius of the panel, animated by <see cref="UpdateShape"/>.</summary>
-    public double ShapeRadius
-    {
-        get => (double)GetValue(ShapeRadiusProperty);
-        set => SetValue(ShapeRadiusProperty, value);
-    }
-
-    void ApplyShape()
-    {
-        var size = Panel.RenderSize;
-        if (size.Width <= 0 || size.Height <= 0) return;
-        double r = Math.Min(ShapeRadius, size.Height / 2);
+        double r = SearchRow.Height / 2;
         Panel.Clip = new RectangleGeometry(new Rect(size), r, r);
         ShadowShape.CornerRadius = Outline.CornerRadius = AiGlowLine.CornerRadius = new CornerRadius(r);
     }
