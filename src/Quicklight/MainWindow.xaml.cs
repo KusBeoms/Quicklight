@@ -23,7 +23,8 @@ public partial class MainWindow : Window
     const string TopHitGroup = ResultItem.HeroGroup;
     const double ShadowMargin = 24;      // DIPs around the panel, room for the drop shadow (matches Shell.Margin)
     const double MaxPanelHeight = 580;   // DIPs; the bar sits so that a fully expanded panel is centered on screen
-    const double ExpandedRadius = 24;    // corner radius with results; the bare search bar is a pill
+    const double CardRadius = 31;        // corners of the results card: the same as the search pill
+    const double CardOffset = 72;        // DIPs from the top of the pill to the top of the card (62 pill + 10 gap)
     const double BackdropPad = 48;       // DIPs captured beyond the panel so the blur near its edges has real content
     const double BackdropBlur = 14;      // blur strength (Gaussian sigma) of the backdrop, in DIPs
 
@@ -62,6 +63,8 @@ public partial class MainWindow : Window
         ((CollectionViewSource)Resources["GroupedResults"]).Source = _items;
         ((CollectionViewSource)Resources["GroupedApps"]).Source = _apps;
         Deactivated += (_, _) => { if (!Pinned) HideLauncher(); };
+        // The window reaches the bottom of the screen so the panel can grow inside it; a click beside the panel closes it.
+        MouseDown += (_, e) => { if (!Pinned && e.OriginalSource is Visual v && !BarPanel.IsAncestorOf(v) && !ListPanel.IsAncestorOf(v)) HideLauncher(); };
         Query.SelectionChanged += (_, _) => SyncCaret();
         Query.TextChanged += (_, _) => SyncCaret();
         Query.SizeChanged += (_, _) => SyncCaret();
@@ -101,8 +104,9 @@ public partial class MainWindow : Window
     public void ApplyBackdrop()
     {
         bool solid = _settings.Backdrop.Equals("solid", StringComparison.OrdinalIgnoreCase);
-        Backdrop.Visibility = solid ? Visibility.Collapsed : Visibility.Visible;
+        Backdrop.Visibility = ListBackdrop.Visibility = solid ? Visibility.Collapsed : Visibility.Visible;
         Tint.SetResourceReference(Border.BackgroundProperty, solid ? "SolidPanelBrush" : "PanelBrush");
+        ListTint.SetResourceReference(Border.BackgroundProperty, solid ? "SolidPanelBrush" : "PanelBrush");
     }
 
     public void Toggle()
@@ -128,13 +132,14 @@ public partial class MainWindow : Window
 
         // Snapshot the screen under the panel before the window covers it (skipped when still fading out: it would capture itself).
         if (!IsVisible && Backdrop.Visibility == Visibility.Visible)
-            CaptureBackdrop(x + margin, panelTop, (int)((Width - 2 * ShadowMargin) * scale), (int)(MaxPanelHeight * scale), scale);
+            CaptureBackdrop(x + margin, panelTop, (int)((Width - 2 * ShadowMargin) * scale), work.Bottom - panelTop, scale);
 
         // Start invisible: otherwise the panel flashes fully opaque until the animation's first frame.
         Shell.BeginAnimation(OpacityProperty, null);
         Shell.Opacity = 0;
         _hiding = false; // shown again mid fade-out: removing the fade above means its Completed never fires
         NativeUi.Move(Handle, x, y);
+        Height = (work.Bottom - y) / scale;
         Show();
         Activate();
         if (!NativeUi.ForceForeground(Handle))
@@ -176,9 +181,12 @@ public partial class MainWindow : Window
         int pad = (int)(BackdropPad * scale);
         try
         {
-            Backdrop.Source = ScreenCapture.CaptureBlurred(x - pad, y - pad, width + 2 * pad, height + 2 * pad, scale, BackdropBlur);
+            // One snapshot from the pill down to the screen's bottom; the card shows the part under itself.
+            Backdrop.Source = ListBackdrop.Source = ScreenCapture.CaptureBlurred(x - pad, y - pad, width + 2 * pad, height + 2 * pad, scale, BackdropBlur);
             Canvas.SetLeft(Backdrop, -pad / scale);
             Canvas.SetTop(Backdrop, -pad / scale);
+            Canvas.SetLeft(ListBackdrop, -pad / scale);
+            Canvas.SetTop(ListBackdrop, -pad / scale - CardOffset);
         }
         catch (Exception ex) { Log.Error("backdrop capture failed", ex); }
     }
@@ -201,7 +209,11 @@ public partial class MainWindow : Window
     /// Nothing is scaled or moved: resampling the cached glyphs (the placeholder, the search icon) at sub-pixel
     /// offsets made them shimmer, whatever the hinting.
     /// </summary>
-    void CacheBody(bool on) => Body.CacheMode = on ? new BitmapCache { SnapsToDevicePixels = true } : null;
+    void CacheBody(bool on)
+    {
+        Bar.CacheMode = on ? new BitmapCache { SnapsToDevicePixels = true } : null;
+        Body.CacheMode = on ? new BitmapCache { SnapsToDevicePixels = true } : null;
+    }
 
     // Fade in while the content comes into focus (blur → sharp).
     // The blur is on the content only: blurring the panel's edge too made it look like it shrank and grew again.
@@ -213,16 +225,18 @@ public partial class MainWindow : Window
         CacheBody(true);
         var blur = new BlurEffect { Radius = 16, RenderingBias = RenderingBias.Performance };
         Body.Effect = blur;
+        Bar.Effect = new BlurEffect { Radius = 16, RenderingBias = RenderingBias.Performance };
         Shell.BeginAnimation(OpacityProperty, Anim(0, 1, 170, ease));
         var focus = Anim(16, 0, ms, ease);
         // Drop the effect and the cache once sharp: an idle BlurEffect would still cost a render pass per frame.
         focus.Completed += (_, _) =>
         {
             if (Body.Effect != blur) return; // hiding again already
-            Body.Effect = null;
+            Body.Effect = Bar.Effect = null;
             CacheBody(false);
         };
         blur.BeginAnimation(BlurEffect.RadiusProperty, focus);
+        Bar.Effect.BeginAnimation(BlurEffect.RadiusProperty, Anim(16, 0, ms, ease));
     }
 
     // Fade out, then hide. No blur: switching the sharp text to the cached, blurred bitmap flickered for a frame.
@@ -271,19 +285,36 @@ public partial class MainWindow : Window
 
     // ---------- shape ----------
 
-    void Panel_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateShape();
+    void ListPanel_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        ListPanel.Clip = new RectangleGeometry(new Rect(e.NewSize), CardRadius, CardRadius);
 
-    /// <summary>A pill while only the search bar shows, rounded corners once the panel expands.</summary>
-    void UpdateShape()
+    /// <summary>
+    /// The card glides to the content's new height instead of snapping; set at once while hidden. It fades in with
+    /// its content coming into focus (like the launcher itself), and fades out as it shrinks to nothing.
+    /// </summary>
+    void Body_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        var size = Panel.RenderSize;
-        if (size.Width <= 0 || size.Height <= 0) return;
-        bool lists = Results.Visibility == Visibility.Visible || IsGrid || _previewOpen;
-        Separator.Visibility = lists ? Visibility.Visible : Visibility.Collapsed;
-        bool expanded = lists || ActivityPanel.Visibility == Visibility.Visible;
-        double r = expanded ? ExpandedRadius : size.Height / 2;
-        Panel.Clip = new RectangleGeometry(new Rect(size), r, r);
-        ShadowShape.CornerRadius = Outline.CornerRadius = new CornerRadius(r);
+        if (!e.HeightChanged) return;
+        double h = e.NewSize.Height;
+        if (!IsVisible)
+        {
+            ListSurface.BeginAnimation(HeightProperty, null);
+            ListSurface.BeginAnimation(OpacityProperty, null);
+            ListSurface.Height = h;
+            ListSurface.Opacity = h > 0 ? 1 : 0;
+            return;
+        }
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        ListSurface.BeginAnimation(HeightProperty, Anim(null, h, 260, ease));
+        ListSurface.BeginAnimation(OpacityProperty, Anim(null, h > 0 ? 1 : 0, h > 0 ? 200 : 180, ease));
+        if (e.PreviousSize.Height == 0 && h > 0 && Body.Effect is null) // appearing, and not already blurred by AnimateIn
+        {
+            var blur = new BlurEffect { Radius = 12, RenderingBias = RenderingBias.Performance };
+            Body.Effect = blur;
+            var focus = Anim(12, 0, 260, ease);
+            focus.Completed += (_, _) => { if (Body.Effect == blur) Body.Effect = null; };
+            blur.BeginAnimation(BlurEffect.RadiusProperty, focus);
+        }
     }
 
     // ---------- searching ----------
@@ -368,9 +399,8 @@ public partial class MainWindow : Window
         if (ordered.Exists(i => i.Result.Action == ActionType.Update)) _ = CheckForUpdateAsync();
 
         bool any = _items.Count > 0;
-        Separator.Visibility = Results.Visibility = Footer.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        Results.Visibility = Footer.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
         if (_previewOpen) Results.Visibility = Visibility.Collapsed; // a later file stage while the preview is open
-        UpdateShape();
         if (!any) return;
         int index = selectedKey is null ? 0 : Math.Max(0, ordered.FindIndex(i => i.Result.Key == selectedKey));
         Select(index, disarm: false);
@@ -415,8 +445,7 @@ public partial class MainWindow : Window
 
         _items.Clear();
         Results.Visibility = Visibility.Collapsed;
-        AppGrid.Visibility = Separator.Visibility = Footer.Visibility = Visibility.Visible;
-        UpdateShape();
+        AppGrid.Visibility = Footer.Visibility = Visibility.Visible;
         if (_apps.Count == 0) { FooterText.Text = "앱 목록을 읽는 중입니다…"; return; }
         AppGrid.SelectedIndex = 0;
         AppGrid.ScrollIntoView(AppGrid.SelectedItem);
@@ -900,7 +929,6 @@ public partial class MainWindow : Window
         PreviewText.Text = "";
         Results.Visibility = Visibility.Collapsed;
         PreviewPanel.Visibility = Visibility.Visible;
-        UpdateShape();
         UpdateFooter();
         if (!wasOpen)
         {
@@ -922,7 +950,6 @@ public partial class MainWindow : Window
         PreviewImage.Source = null;
         PreviewText.Text = "";
         Results.Visibility = _items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        UpdateShape();
         UpdateFooter();
     }
 
@@ -1054,7 +1081,6 @@ public partial class MainWindow : Window
         var visibility = _activities.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (ActivityPanel.Visibility == visibility) return;
         ActivityPanel.Visibility = visibility;
-        UpdateShape();
     }
 
     /// <summary>

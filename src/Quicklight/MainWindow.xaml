@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Quicklight"
-        Title="Quicklight" Width="768" SizeToContent="Height"
+        Title="Quicklight" Width="768" Height="700"
         WindowStyle="None" AllowsTransparency="False" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
         Background="Transparent" FontFamily="{StaticResource UiFont}"
         UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
@@ -225,29 +225,27 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <DropShadowEffect x:Key="SurfaceShadow" BlurRadius="30" ShadowDepth="8" Opacity="0.38" Direction="270" />
     </Window.Resources>
 
-    <!-- The margin leaves room for the drop shadow. Opacity is animated on show and hide; the blur only on Body,
-         so the panel's outline stays crisp. -->
-    <Grid x:Name="Shell" Margin="24">
-
-        <Border x:Name="ShadowShape" Background="{DynamicResource SolidPanelBrush}" CornerRadius="31">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="30" ShadowDepth="8" Opacity="0.38" Direction="270" />
-            </Border.Effect>
-        </Border>
-
-        <Grid x:Name="Panel" SizeChanged="Panel_SizeChanged">
-            <!-- A blurred snapshot of the screen behind the window: acrylic that works with any corner radius.
-                 Blurred once when captured (no live effect, so animation frames stay cheap), drawn scaled up.
-                 On a Canvas so the (larger) snapshot never takes part in sizing the panel. -->
-            <Canvas IsHitTestVisible="False">
-                <Image x:Name="Backdrop" Stretch="None" RenderOptions.BitmapScalingMode="Linear" />
-            </Canvas>
-            <Border x:Name="Tint" Background="{DynamicResource PanelBrush}" />
-
-            <StackPanel x:Name="Body">
-                <Grid Height="62" Margin="24,0,22,0">
+    <!-- Two surfaces: the search pill and, below it, a rounded card with the results. Each has its own shadow,
+         blurred backdrop, tint and outline. The margin leaves room for the drop shadow. Opacity is animated on show
+         and hide; the blur only on the content, so the outlines stay crisp. -->
+    <StackPanel x:Name="Shell" Margin="24" VerticalAlignment="Top">
+        <Grid Height="62">
+            <Border CornerRadius="31" Background="{DynamicResource SolidPanelBrush}" Effect="{StaticResource SurfaceShadow}" />
+            <Grid x:Name="BarPanel">
+                <Grid.Clip>
+                    <RectangleGeometry Rect="0,0,720,62" RadiusX="31" RadiusY="31" />
+                </Grid.Clip>
+                <!-- A blurred snapshot of the screen behind the window: acrylic that works with any corner radius.
+                     Blurred once when captured (no live effect, so animation frames stay cheap), drawn scaled up.
+                     On a Canvas so the (larger) snapshot never takes part in sizing the panel. -->
+                <Canvas IsHitTestVisible="False">
+                    <Image x:Name="Backdrop" Stretch="None" RenderOptions.BitmapScalingMode="Linear" />
+                </Canvas>
+                <Border x:Name="Tint" Background="{DynamicResource PanelBrush}" />
+                <Grid x:Name="Bar" Margin="24,0,22,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
@@ -273,8 +271,21 @@
                                VerticalAlignment="Center" Margin="12,0,0,0" />
                 </Grid>
 
-                <Border x:Name="Separator" Height="1" Background="{DynamicResource SeparatorBrush}" Visibility="Collapsed" />
+            </Grid>
+            <Border CornerRadius="31" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" IsHitTestVisible="False" />
+        </Grid>
 
+        <!-- The results card. Its height animates towards the content's; at zero it fades out. -->
+        <Grid x:Name="ListSurface" Margin="0,10,0,0" Height="0" Opacity="0">
+            <Border CornerRadius="31" Background="{DynamicResource SolidPanelBrush}" Effect="{StaticResource SurfaceShadow}" />
+            <Grid x:Name="ListPanel" SizeChanged="ListPanel_SizeChanged">
+                <Canvas IsHitTestVisible="False">
+                    <Image x:Name="ListBackdrop" Stretch="None" RenderOptions.BitmapScalingMode="Linear" />
+                </Canvas>
+                <Border x:Name="ListTint" Background="{DynamicResource PanelBrush}" />
+                <!-- On a Canvas so the content keeps its natural height while the card's height animates towards it. -->
+                <Canvas>
+                    <StackPanel x:Name="Body" Width="{Binding ActualWidth, ElementName=ListPanel}" SizeChanged="Body_SizeChanged">
                 <ListBox x:Name="Results" ItemsSource="{Binding Source={StaticResource GroupedResults}}"
                          ItemTemplateSelector="{StaticResource ResultSelector}" ItemContainerStyle="{StaticResource RowStyle}"
                          Background="Transparent" BorderThickness="0" Padding="0,4,0,6" MaxHeight="500" Visibility="Collapsed"
@@ -334,9 +345,10 @@
                         Visibility="Collapsed" IsHitTestVisible="False">
                     <ItemsControl x:Name="Activities" ItemTemplate="{StaticResource ActivityTemplate}" Focusable="False" />
                 </Border>
-            </StackPanel>
+                    </StackPanel>
+                </Canvas>
+            </Grid>
+            <Border CornerRadius="31" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" IsHitTestVisible="False" />
         </Grid>
-
-        <Border x:Name="Outline" CornerRadius="31" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" IsHitTestVisible="False" />
-    </Grid>
+    </StackPanel>
 </Window>
