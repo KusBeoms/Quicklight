@@ -98,14 +98,21 @@ public sealed class McpServer(SearchEngine engine, EverythingClient? everything,
                     ["from"] = Prop("string", "Source currency, e.g. \"USD\" or \"달러\"."),
                     ["to"] = Prop("string", "Target currency (default: the user's default currency, KRW unless configured)."),
                 }, ["amount", "from"], readOnly: true),
-            Tool("translate", "Translate text on this computer with a local LibreTranslate server (nothing is sent to the internet). The source language is detected automatically.",
-                new JsonObject
-                {
-                    ["text"] = Prop("string", "Text to translate (up to 5000 characters)."),
-                    ["to"] = Prop("string", "Target language: code (ko, en, ja, zh, ...) or name (영어, 한국어, japanese). Default: the system language, or English when the text already is in it."),
-                }, ["text"], readOnly: true),
             Tool("calculate", "Evaluate a math expression: + - * / % ^, parentheses, sqrt abs round floor ceil sin cos tan asin acos atan log ln exp, pi, e.",
                 new JsonObject { ["expression"] = Prop("string", "e.g. \"(1200*1.1)^2 / 3\"") }, ["expression"], readOnly: true),
+            Tool("convert_unit", "Convert between units of length, mass, temperature, data size, area (incl. 평), volume and speed. Without a target unit, the usual counterparts are returned.",
+                new JsonObject { ["query"] = Prop("string", "e.g. \"5 km in mile\", \"70kg lb\", \"30c f\", \"84m2 평\", \"1.5gb\".") }, ["query"], readOnly: true),
+            Tool("date_calc", "Date and time answers: date offsets (\"today +100d\", \"오늘 +3개월\"), days until a date (\"d-day 2026-12-25\", \"12월 25일까지\") and the time in a city (\"now tokyo\", \"뉴욕 시간\").",
+                new JsonObject { ["query"] = Prop("string", "Date expression, as described.") }, ["query"], readOnly: true),
+            Tool("list_windows", "List the open top-level windows (as in Alt+Tab), front to back, with their program.",
+                new JsonObject { ["filter"] = Prop("string", "Only windows whose title or program contains this text.") }, [], readOnly: true),
+            Tool("recent_files", "Files modified recently, newest first (Everything index).",
+                new JsonObject
+                {
+                    ["days"] = Prop("integer", "How many days back (1-365, default 7)."),
+                    ["ext"] = Prop("string", "Only these extensions, e.g. \"pdf\" or \"docx;xlsx\"."),
+                    ["limit"] = Prop("integer", "Maximum results (1-500, default 30)."),
+                }, [], readOnly: true),
         };
         if (options.AllowOpen)
         {
@@ -128,7 +135,10 @@ public sealed class McpServer(SearchEngine engine, EverythingClient? everything,
                 "search" => await SearchAsync(args, ct),
                 "search_files" => await SearchFilesAsync(args, ct),
                 "calculate" => Calculate(args),
-                "translate" => await TranslateAsync(args, ct),
+                "convert_unit" => Answers(args, UnitProvider.Convert(RequiredString(args, "query"))),
+                "date_calc" => Answers(args, DateProvider.Evaluate(RequiredString(args, "query"), DateTime.Now)),
+                "list_windows" => ListWindows(args),
+                "recent_files" => await RecentFilesAsync(args, ct),
                 "convert_currency" => await ConvertCurrencyAsync(args, ct),
                 "open" when options.AllowOpen => await OpenAsync(args),
                 "reveal" when options.AllowOpen => Reveal(args),
@@ -242,41 +252,6 @@ public sealed class McpServer(SearchEngine engine, EverythingClient? everything,
         }, markdown);
     }
 
-    async Task<JsonObject> TranslateAsync(JsonObject args, CancellationToken ct)
-    {
-        var text = RequiredString(args, "text");
-        if (text.Length > 5000) throw new ToolException("'text' is longer than 5000 characters.");
-        var toText = Str(args["to"]);
-        if (engine.Translator is null) throw new ToolException("Translation is turned off in Quicklight settings.");
-        string target;
-        if (toText is null)
-            target = Quicklight.Core.Translation.TranslationParser.DefaultTarget(text, Quicklight.Core.Translation.Languages.System, engine.SecondaryLanguage, engine.TranslationLanguages);
-        else
-            target = Quicklight.Core.Translation.Languages.CodeFor(toText)
-                     ?? (toText.Length is 2 or 3 && toText.All(char.IsAsciiLetter) ? toText.ToLowerInvariant() : throw new ToolException($"Unknown language '{toText}'."));
-
-        // The first call may start the local server and download models, so allow a while.
-        if (!await engine.Translator.EnsureReadyAsync(TimeSpan.FromSeconds(90), ct))
-            throw new ToolException("The local LibreTranslate server is not available (see %LOCALAPPDATA%\\Quicklight\\libretranslate.log).");
-        Quicklight.Core.Translation.TranslationResult r;
-        try
-        {
-            r = await engine.Translator.TranslateAsync(text, target, ct);
-            if (toText is null && r.Source == target)
-                r = await engine.Translator.TranslateAsync(text, Quicklight.Core.Translation.TranslationParser.Fallback(target, engine.SecondaryLanguage, engine.TranslationLanguages), ct);
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { throw new ToolException("Translation timed out."); }
-        catch (Exception ex) when (ex is Quicklight.Core.Translation.TranslationException or HttpRequestException) { throw new ToolException("Translation failed: " + ex.Message); }
-        return ToolResult(new JsonObject
-        {
-            ["text"] = text,
-            ["translation"] = r.Text,
-            ["source"] = r.Source,
-            ["target"] = r.Target,
-            ["alternatives"] = new JsonArray(r.Alternatives.Select(a => (JsonNode)a).ToArray()),
-        }, McpMarkdown.Translation(r, text));
-    }
-
     static JsonObject Calculate(JsonObject args)
     {
         var expr = RequiredString(args, "expression");
@@ -285,6 +260,42 @@ public sealed class McpServer(SearchEngine engine, EverythingClient? everything,
             throw new ToolException($"Cannot evaluate '{expr}'.");
         return ToolResult(new JsonObject { ["expression"] = expr, ["value"] = v, ["formatted"] = Calculator.Format(v) },
             McpMarkdown.Answer(Calculator.Format(v), expr.Trim().TrimEnd('=').Trim() + " ="));
+    }
+
+    /// <summary>Unit and date answers: the first row is the answer, any others are alternatives.</summary>
+    static JsonObject Answers(JsonObject args, IReadOnlyList<SearchResult> results)
+    {
+        var query = RequiredString(args, "query");
+        if (results.Count == 0) throw new ToolException($"Cannot understand '{query}'.");
+        var arr = new JsonArray();
+        foreach (var r in results) arr.Add(new JsonObject { ["value"] = r.Title, ["plain"] = r.Target, ["detail"] = r.Subtitle });
+        var md = McpMarkdown.Answer(results[0].Title, results[0].Subtitle);
+        if (results.Count > 1) md += "\n" + string.Join("\n", results.Skip(1).Select(r => $"- {r.Subtitle}"));
+        return ToolResult(new JsonObject { ["query"] = query, ["results"] = arr }, md);
+    }
+
+    static JsonObject ListWindows(JsonObject args)
+    {
+        var filter = Str(args["filter"]) ?? "";
+        var windows = WindowProvider.List().Where(w => filter.Length == 0
+            || w.Title.Contains(filter, StringComparison.OrdinalIgnoreCase) || w.ProcessName.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+        var arr = new JsonArray();
+        foreach (var w in windows)
+        {
+            var o = new JsonObject { ["title"] = w.Title, ["process"] = w.ProcessName };
+            if (w.ExePath is not null) o["path"] = w.ExePath;
+            arr.Add(o);
+        }
+        var md = windows.Count == 0 ? "열린 창이 없습니다." : string.Join("\n", windows.Select(w => $"- {w.Title} · {w.ProcessName}"));
+        return ToolResult(new JsonObject { ["count"] = arr.Count, ["windows"] = arr }, md);
+    }
+
+    Task<JsonObject> RecentFilesAsync(JsonObject args, CancellationToken ct)
+    {
+        int days = Math.Clamp(Arg<int>(args, "days") ?? 7, 1, 365);
+        var query = $"file: dm:last{days}days";
+        if (Str(args["ext"]) is { Length: > 0 } ext) query += " ext:" + ext.Replace(" ", "");
+        return SearchFilesAsync(new JsonObject { ["query"] = query, ["limit"] = Arg<int>(args, "limit") ?? 30, ["sort"] = "modified" }, ct);
     }
 
     async Task<JsonObject> OpenAsync(JsonObject args)

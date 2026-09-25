@@ -40,6 +40,7 @@ public sealed class TrayIcon : IDisposable
         var everything = new Forms.ToolStripMenuItem("파일 검색 엔진(Everything) 설치…", null, (_, _) => installEverything());
         menu.Items.Add(everything);
         menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add($"Quicklight v{BuildInfo.Version} ({BuildInfo.BuildTime} 빌드)").Enabled = false;
         menu.Items.Add("종료", null, (_, _) => exit());
         menu.Opening += (_, _) =>
         {

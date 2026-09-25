@@ -1,20 +1,18 @@
 using System.Text;
 using Quicklight.Core.Everything;
 using Quicklight.Core.Models;
-using Quicklight.Core.Translation;
 
 namespace Quicklight.Mcp;
 
 /// <summary>
 /// The launcher's UI as Markdown, for AI clients: no window opens, the answer reads like the Spotlight panel.
-/// Direct answers (calculation, conversion, translation) become a big heading; other results are grouped by kind.
+/// Direct answers (calculation, conversion) become a big heading; other results are grouped by kind.
 /// </summary>
 public static class McpMarkdown
 {
     static string KindLabel(ResultKind k) => k switch
     {
         ResultKind.Calculator => "계산기",
-        ResultKind.Translation => "번역",
         ResultKind.Currency => "환율",
         ResultKind.Url => "웹사이트",
         ResultKind.Path => "경로",
@@ -28,7 +26,7 @@ public static class McpMarkdown
     };
 
     static bool IsAnswer(SearchResult r) =>
-        r.Kind is ResultKind.Calculator or ResultKind.Currency or ResultKind.Translation && r.Action != ActionType.None;
+        r.Kind is ResultKind.Calculator or ResultKind.Currency && r.Action != ActionType.None;
 
     public static string Search(string query, IReadOnlyList<SearchResult> results)
     {
@@ -96,19 +94,6 @@ public static class McpMarkdown
         sb.AppendLine("| 이름 | 폴더 | 크기 | 수정한 날짜 |").AppendLine("|---|---|---:|---|");
         foreach (var i in items)
             sb.AppendLine($"| {(i.IsFolder ? "📁 " : "")}{Cell(i.Name)} | `{Code(i.Directory)}` | {(i.Size >= 0 ? Size(i.Size) : "")} | {i.Modified:yyyy-MM-dd HH:mm} |");
-        return sb.ToString().TrimEnd();
-    }
-
-    public static string Translation(TranslationResult r, string original)
-    {
-        var sb = new StringBuilder();
-        Answer(sb, r.Text, $"{Languages.KoreanName(r.Source)} → {Languages.KoreanName(r.Target)} · LibreTranslate (로컬)");
-        sb.AppendLine($"원문: {Escape(original)}");
-        if (r.Alternatives.Count > 0)
-        {
-            sb.AppendLine().AppendLine("#### 다른 번역");
-            foreach (var a in r.Alternatives) sb.AppendLine($"- {Escape(a)}");
-        }
         return sb.ToString().TrimEnd();
     }
 

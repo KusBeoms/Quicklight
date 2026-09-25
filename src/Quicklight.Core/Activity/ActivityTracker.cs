@@ -4,8 +4,7 @@ namespace Quicklight.Core.Activity;
 public sealed record ActivityInfo(string Id, string Title, double? Progress, string? Detail);
 
 /// <summary>
-/// Long-running background work the launcher shows as progress bars: translation engine install, language models,
-/// update downloads, app and file indexing. Thread-safe; <see cref="Changed"/> fires on the reporting thread.
+/// Long-running background work the launcher shows as progress bars: update downloads, app and file indexing. Thread-safe; <see cref="Changed"/> fires on the reporting thread.
 /// </summary>
 public sealed class ActivityTracker
 {

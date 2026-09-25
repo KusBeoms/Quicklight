@@ -24,6 +24,24 @@ internal static class NativeUi
 
     public static bool IsForeground(IntPtr hwnd) => GetForegroundWindow() == hwnd;
 
+    public static IntPtr Foreground() => GetForegroundWindow();
+
+    /// <summary>Types Ctrl+V into the foreground window.</summary>
+    public static void SendPaste()
+    {
+        const byte VK_CONTROL = 0x11, VK_V = 0x56;
+        const uint KEYUP = 2;
+        keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
+        keybd_event(VK_V, 0, 0, UIntPtr.Zero);
+        keybd_event(VK_V, 0, KEYUP, UIntPtr.Zero);
+        keybd_event(VK_CONTROL, 0, KEYUP, UIntPtr.Zero);
+    }
+
+    /// <summary>The Explorer "Properties" dialog of a file or folder.</summary>
+    public static bool ShowProperties(string path) => SHObjectProperties(IntPtr.Zero, 2 /* SHOP_FILEPATH */, path, null);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern bool SHObjectProperties(IntPtr hwnd, uint type, string name, string? page);
+
     /// <summary>
     /// Brings the window to the foreground even when another app has focus. SetForegroundWindow can report success
     /// without taking effect (foreground lock), so the result is checked and stronger fallbacks are tried in turn.
@@ -78,6 +96,22 @@ internal static class NativeUi
         public int dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
     }
 
+    /// <summary>
+    /// Per-pixel transparency composed by DWM on the GPU. A WPF layered window (AllowsTransparency) instead copies
+    /// every frame back to the CPU, which halves the frame rate of the show/hide animation.
+    /// </summary>
+    public static void MakeGpuTransparent(IntPtr hwnd)
+    {
+        var margins = new MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+        DwmExtendFrameIntoClientArea(hwnd, ref margins);
+        int square = 1 /* DWMWCP_DONOTROUND */, noBorder = unchecked((int)0xFFFFFFFE) /* DWMWA_COLOR_NONE */;
+        DwmSetWindowAttribute(hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, ref square, sizeof(int));
+        DwmSetWindowAttribute(hwnd, 34 /* DWMWA_BORDER_COLOR */, ref noBorder, sizeof(int));
+    }
+
+    [StructLayout(LayoutKind.Sequential)] struct MARGINS { public int Left, Right, Top, Bottom; }
+    [DllImport("dwmapi.dll")] static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS margins);
+    [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
     [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT p);
     [DllImport("user32.dll")] static extern IntPtr MonitorFromPoint(POINT p, uint flags);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool GetMonitorInfo(IntPtr mon, ref MONITORINFOEX info);

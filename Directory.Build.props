@@ -1,11 +1,13 @@
 <Project>
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- The Windows 10 SDK version brings the WinRT projection (clipboard history); 1809 is the oldest Windows that has it. -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>0.2.2</Version>
+    <Version>0.2.3</Version>
     <!-- The updater only accepts downloads whose product name is Quicklight. -->
     <Product>Quicklight</Product>
     <Authors>kusbeoms</Authors>

@@ -7,6 +7,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 using Quicklight.Core;
 using Quicklight.Core.Activity;
 using Quicklight.Core.Everything;
@@ -29,6 +30,8 @@ public partial class MainWindow : Window
     readonly SearchEngine _engine;
     readonly QuicklightSettings _settings;
     readonly UpdateService _updates;
+    readonly ClipboardHistoryProvider _clipboard;
+    IntPtr _previousForeground; // where Paste results go
     readonly IconLoader _icons = new(64);
     readonly ObservableCollection<ResultItem> _items = [];
     readonly ObservableCollection<ResultItem> _apps = [];
@@ -49,9 +52,10 @@ public partial class MainWindow : Window
     /// <summary>Keep the window open when it loses focus (--pinned, for screenshots and debugging).</summary>
     public bool Pinned { get; set; }
 
-    public MainWindow(SearchEngine engine, QuicklightSettings settings, UpdateService updates)
+    public MainWindow(SearchEngine engine, QuicklightSettings settings, UpdateService updates, ClipboardHistoryProvider clipboard)
     {
         _engine = engine;
+        _clipboard = clipboard;
         _settings = settings;
         _updates = updates;
         InitializeComponent();
@@ -67,6 +71,12 @@ public partial class MainWindow : Window
             else _indexPoll.Stop();
         };
         SyncActivities();
+        _holdTimer.Tick += (_, _) =>
+        {
+            _holdTimer.Stop();
+            SpringBack();
+            OpenPreview();
+        };
     }
 
     bool IsGrid => AppGrid.Visibility == Visibility.Visible;
@@ -77,6 +87,8 @@ public partial class MainWindow : Window
     public void InitializeHidden()
     {
         Handle = new WindowInteropHelper(this).EnsureHandle();
+        HwndSource.FromHwnd(Handle).CompositionTarget.BackgroundColor = Colors.Transparent;
+        NativeUi.MakeGpuTransparent(Handle);
         ApplyBackdrop();
     }
 
@@ -107,10 +119,16 @@ public partial class MainWindow : Window
         int margin = (int)(ShadowMargin * scale);
         int y = panelTop - margin;
 
+        if (!IsVisible) _previousForeground = NativeUi.Foreground();
+
         // Snapshot the screen under the panel before the window covers it (skipped when still fading out: it would capture itself).
         if (!IsVisible && Backdrop.Visibility == Visibility.Visible)
             CaptureBackdrop(x + margin, panelTop, (int)((Width - 2 * ShadowMargin) * scale), (int)(MaxPanelHeight * scale), scale);
 
+        // Start invisible: otherwise the panel flashes fully opaque until the animation's first frame.
+        Shell.BeginAnimation(OpacityProperty, null);
+        Shell.Opacity = 0;
+        _hiding = false; // shown again mid fade-out: removing the fade above means its Completed never fires
         NativeUi.Move(Handle, x, y);
         Show();
         Activate();
@@ -129,7 +147,9 @@ public partial class MainWindow : Window
         Keyboard.Focus(Query);
         // Like Spotlight: the previous query stays, selected, so typing replaces it.
         Query.SelectAll();
-        AnimateIn();
+        // Wait for the first frame (layout, backdrop upload, bitmap cache) so the slow start is not eaten by the
+        // time-based animation, which would otherwise jump ahead.
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () => { if (IsVisible && !_hiding) AnimateIn(); });
         _ = UpdateStatusAsync();
         _ = _engine.WarmUpAsync();
     }
@@ -140,6 +160,8 @@ public partial class MainWindow : Window
         _updateCts?.Cancel(); // closing the launcher cancels an update check or download
         _cts?.Cancel(); // no point finishing Everything queries nobody will see
         Disarm();
+        CancelHold();
+        ClosePreview();
         if (ActiveList.ContextMenu is { IsOpen: true } menu) menu.IsOpen = false;
         AnimateOut(() => Hide());
     }
@@ -169,20 +191,27 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// While animating, the panel is drawn once into a GPU bitmap, so each frame only scales, fades and blurs that
-    /// bitmap instead of redrawing every row. Dropped afterwards so the settled panel is pixel-sharp.
+    /// While animating, the panel content is drawn once into a GPU bitmap, so each frame only scales, fades and blurs
+    /// that bitmap instead of redrawing every row. Dropped afterwards so the settled panel is pixel-sharp.
+    /// Text is hinted for motion meanwhile: pixel-snapped glyphs (the placeholder, the search icon) wobble while the
+    /// scale changes.
     /// </summary>
-    void CacheShell(bool on) => Shell.CacheMode = on ? new BitmapCache { SnapsToDevicePixels = true } : null;
+    void CacheBody(bool on)
+    {
+        Body.CacheMode = on ? new BitmapCache() : null;
+        TextOptions.SetTextHintingMode(Shell, on ? TextHintingMode.Animated : TextHintingMode.Auto);
+    }
 
-    // Fade in while the whole panel comes into focus (blur → sharp) and settles from a slightly smaller scale.
+    // Fade in while the content comes into focus (blur → sharp) and the panel settles from a slightly smaller scale.
+    // The blur is on the content only: blurring the panel's edge too made it look like it shrank and grew again.
     void AnimateIn()
     {
         _hiding = false;
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
         const double ms = 230;
-        CacheShell(true);
+        CacheBody(true);
         var blur = new BlurEffect { Radius = 16, RenderingBias = RenderingBias.Performance };
-        Shell.Effect = blur;
+        Body.Effect = blur;
         Shell.BeginAnimation(OpacityProperty, Anim(0, 1, 170, ease));
         ShellScale.BeginAnimation(ScaleTransform.ScaleXProperty, Anim(0.97, 1, ms, ease));
         ShellScale.BeginAnimation(ScaleTransform.ScaleYProperty, Anim(0.97, 1, ms, ease));
@@ -190,9 +219,9 @@ public partial class MainWindow : Window
         // Drop the effect and the cache once sharp: an idle BlurEffect would still cost a render pass per frame.
         focus.Completed += (_, _) =>
         {
-            if (Shell.Effect != blur) return; // hiding again already
-            Shell.Effect = null;
-            CacheShell(false);
+            if (Body.Effect != blur) return; // hiding again already
+            Body.Effect = null;
+            CacheBody(false);
         };
         blur.BeginAnimation(BlurEffect.RadiusProperty, focus);
     }
@@ -203,9 +232,9 @@ public partial class MainWindow : Window
         _hiding = true;
         var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
         const double ms = 160;
-        CacheShell(true);
+        CacheBody(true);
         var blur = new BlurEffect { Radius = 0, RenderingBias = RenderingBias.Performance };
-        Shell.Effect = blur;
+        Body.Effect = blur;
         blur.BeginAnimation(BlurEffect.RadiusProperty, Anim(0, 16, ms, ease));
         ShellScale.BeginAnimation(ScaleTransform.ScaleXProperty, Anim(null, 0.97, ms, ease));
         ShellScale.BeginAnimation(ScaleTransform.ScaleYProperty, Anim(null, 0.97, ms, ease));
@@ -228,7 +257,7 @@ public partial class MainWindow : Window
     {
         var size = Panel.RenderSize;
         if (size.Width <= 0 || size.Height <= 0) return;
-        bool lists = Results.Visibility == Visibility.Visible || IsGrid;
+        bool lists = Results.Visibility == Visibility.Visible || IsGrid || _previewOpen;
         Separator.Visibility = lists ? Visibility.Visible : Visibility.Collapsed;
         bool expanded = lists || ActivityPanel.Visibility == Visibility.Visible;
         double r = expanded ? ExpandedRadius : size.Height / 2;
@@ -242,6 +271,7 @@ public partial class MainWindow : Window
     {
         Placeholder.Visibility = Query.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         Disarm();
+        ClosePreview();
         if (AppCatalog.IsCatalogQuery(Query.Text))
         {
             _cts?.Cancel();
@@ -273,8 +303,8 @@ public partial class MainWindow : Window
                 expandSystemFolders: expandSystemFolders, expandSystemFiles: expandSystemFiles);
             if (token.IsCancellationRequested) return;
             Render(fast, keepSelection: false);
-            // Later passes bring files and translations; skip them only when neither can contribute.
-            if (_lastQuery.Length < 2 || (!_settings.FileSearch && !_settings.Translation)) return;
+            // Later passes bring files; skip them when file search is off.
+            if (_lastQuery.Length < 2 || !_settings.FileSearch) return;
 
             await Task.Delay(60, token); // debounce the Everything round-trips while typing
             IReadOnlyList<SearchResult> results = fast;
@@ -284,16 +314,6 @@ public partial class MainWindow : Window
                     expandSystemFolders: expandSystemFolders, expandSystemFiles: expandSystemFiles);
                 if (token.IsCancellationRequested) return;
                 Render(results, keepSelection: true);
-            }
-
-            // Translation server still starting (first run downloads models): wait for it, then search once more.
-            if (results.Any(r => r.Kind == ResultKind.Translation && r.Action == ActionType.None) &&
-                _engine.Translator is { IsReady: false } translator &&
-                await translator.EnsureReadyAsync(TimeSpan.FromMinutes(20), token) && !token.IsCancellationRequested)
-            {
-                results = await _engine.SearchAsync(text, ct: token, files: FileStage.Full,
-                    expandSystemFolders: expandSystemFolders, expandSystemFiles: expandSystemFiles);
-                if (!token.IsCancellationRequested) Render(results, keepSelection: true);
             }
         }
         catch (OperationCanceledException) { }
@@ -328,6 +348,7 @@ public partial class MainWindow : Window
 
         bool any = _items.Count > 0;
         Separator.Visibility = Results.Visibility = Footer.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        if (_previewOpen) Results.Visibility = Visibility.Collapsed; // a later file stage while the preview is open
         UpdateShape();
         if (!any) return;
         int index = selectedKey is null ? 0 : Math.Max(0, ordered.FindIndex(i => i.Result.Key == selectedKey));
@@ -336,6 +357,7 @@ public partial class MainWindow : Window
 
     void LoadIcon(ResultItem item, int generation)
     {
+        if (item.Result.Kind == ResultKind.Clipboard && _clipboard.Thumbnail(item.Result.Target) is { } thumb) { item.Icon = thumb; return; }
         if (item.Icon is not null || item.Result.IconSource is not { } src) return;
         bool isFolder = item.Result.Kind == ResultKind.Folder || item.Result.Kind == ResultKind.Path && src.EndsWith('\\');
         _icons.Load(src, isFolder, generation, img =>
@@ -360,7 +382,7 @@ public partial class MainWindow : Window
                     _apps.Add(new ResultItem(new SearchResult
                     {
                         Title = app.Name,
-                        Subtitle = app.FilePath ?? "앱",
+                        Subtitle = "애플리케이션",
                         Kind = ResultKind.App,
                         Target = app.LaunchTarget,
                         IconSource = app.LaunchTarget,
@@ -402,10 +424,32 @@ public partial class MainWindow : Window
     void Query_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         var mods = Keyboard.Modifiers;
+        // Another key while Space is still down: the Space was a tap, so it goes in first to keep the typing order.
+        if (_holding && e.Key != Key.Space) FinishHold();
         // Alt+. : Everything's own settings (indexed folders and drives, exclusions). With Alt held WPF reports Key.System.
         if (e.Key == Key.System && e.SystemKey == Key.OemPeriod)
         {
             _ = OpenEverythingOptionsAsync();
+            e.Handled = true;
+            return;
+        }
+        if (_previewOpen)
+        {
+            if (e.Key == Key.Space && e.IsRepeat) { e.Handled = true; return; } // still holding the Space that opened it
+            if (e.Key is Key.Escape or Key.Space) { ClosePreview(); e.Handled = true; return; }
+            if (e.Key is Key.Up or Key.Down)
+            {
+                Select(Results.SelectedIndex + (e.Key == Key.Down ? 1 : -1));
+                if (Selected is { } next && CanPreview(next.Result)) OpenPreview();
+                else ClosePreview();
+                e.Handled = true;
+                return;
+            }
+        }
+        // Holding Space on a file or folder opens its preview; a tap still types a space.
+        if (e.Key == Key.Space && mods == ModifierKeys.None && !IsGrid && Selected is { } held && CanPreview(held.Result))
+        {
+            if (!e.IsRepeat && !_holding) StartHold(held);
             e.Handled = true;
             return;
         }
@@ -419,6 +463,16 @@ public partial class MainWindow : Window
             case Key.Up: Select(Results.SelectedIndex - 1); e.Handled = true; break;
             case Key.PageDown: SelectIn(ActiveList, ActiveList.SelectedIndex + (IsGrid ? 21 : 5)); e.Handled = true; break;
             case Key.PageUp: SelectIn(ActiveList, ActiveList.SelectedIndex - (IsGrid ? 21 : 5)); e.Handled = true; break;
+            case Key.Enter when mods == (ModifierKeys.Control | ModifierKeys.Shift):
+                if (Selected is { } toElevate && ShellLauncher.CanRunAsAdmin(toElevate.Result.RevealPath ?? toElevate.Result.Target))
+                    RunAsAdmin(toElevate, toElevate.Result.RevealPath ?? toElevate.Result.Target);
+                e.Handled = true; break;
+            case Key.System when e.SystemKey == Key.Enter: // Alt+Enter
+                if (Selected is { } toInspect) ShowProperties(toInspect);
+                e.Handled = true; break;
+            case Key.Delete when Selected is { Result.Kind: ResultKind.Clipboard } entry:
+                if (_clipboard.Delete(entry.Result.Target)) _ = RunSearchAsync(Query.Text);
+                e.Handled = true; break;
             case Key.Enter when mods.HasFlag(ModifierKeys.Control):
                 if (Selected is { } toReveal) Reveal(toReveal);
                 e.Handled = true; break;
@@ -435,6 +489,24 @@ public partial class MainWindow : Window
                 if (Selected is { } toCopy) CopyPath(toCopy);
                 e.Handled = true; break;
         }
+    }
+
+    void Query_PreviewKeyUp(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Space || !_holding) return;
+        e.Handled = true;
+        FinishHold();
+    }
+
+    /// <summary>Ends a Space hold: a tap (preview not opened yet) types the space.</summary>
+    void FinishHold()
+    {
+        bool tapped = _holdTimer.IsEnabled;
+        CancelHold();
+        if (!tapped) return; // the preview opened
+        int start = Query.SelectionStart;
+        Query.SelectedText = " ";
+        Query.Select(start + 1, 0);
     }
 
     static (ListBoxItem? Container, ResultItem? Item) HitItem(ListBox list, MouseButtonEventArgs e)
@@ -494,6 +566,7 @@ public partial class MainWindow : Window
         {
             Add("", "파일 탐색기에서 열기", () => Reveal(item));
             Add("", "경로 복사", () => CopyPath(item));
+            Add("", "속성", () => ShowProperties(item));
         }
         return menu;
     }
@@ -515,7 +588,7 @@ public partial class MainWindow : Window
     void Execute(ResultItem item)
     {
         var r = item.Result;
-        if (r.Action == ActionType.None) return; // informational row ("translating…")
+        if (r.Action == ActionType.None) return; // informational row
         if (r.Action == ActionType.Update) { _ = RunUpdateAsync(); return; }
         if (r.Action == ActionType.Expand)
         {
@@ -532,6 +605,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (r.Action == ActionType.Paste)
+        {
+            _ = PasteAsync(r);
+            return;
+        }
+
         if (r.Action == ActionType.Copy)
         {
             TrySetClipboard(r.Target);
@@ -543,6 +622,27 @@ public partial class MainWindow : Window
         _engine.RecordSelection(_lastQuery, r);
         try { SearchEngine.Execute(r); }
         catch (Exception ex) { ShowError("실행하지 못했습니다", r.Target, ex); }
+    }
+
+    /// <summary>Clipboard entry or snippet: put it on the clipboard, go back to the window the launcher opened over, press Ctrl+V.</summary>
+    async Task PasteAsync(SearchResult r)
+    {
+        bool ok = r.Kind == ResultKind.Clipboard ? _clipboard.MakeCurrent(r.Target) : TrySetClipboard(r.Target);
+        if (!ok) { Status.Text = "클립보드에 넣지 못했습니다"; return; }
+        _engine.RecordSelection(_lastQuery, r);
+        var target = _previousForeground;
+        HideLauncher();
+        if (target == IntPtr.Zero || target == Handle) return;
+        NativeUi.ForceForeground(target);
+        await Task.Delay(60); // let the target window take the focus before the keystrokes arrive
+        NativeUi.SendPaste();
+    }
+
+    void ShowProperties(ResultItem item)
+    {
+        if (item.Result.RevealPath is not { } path) return;
+        HideLauncher();
+        if (!NativeUi.ShowProperties(path)) Log.Info("no properties for " + path);
     }
 
     async Task ShowAndSearchExpandedAsync(string query, bool folders, bool files)
@@ -681,6 +781,7 @@ public partial class MainWindow : Window
 
     void UpdateFooter()
     {
+        if (_previewOpen) { FooterText.Text = "Space / Esc  닫기      ↑↓  다른 항목 미리보기"; return; }
         if (Selected is not { } item) { FooterText.Text = ""; return; }
         var r = item.Result;
         if (IsGrid)
@@ -695,6 +796,9 @@ public partial class MainWindow : Window
         {
             ActionType.Copy => "결과 복사",
             ActionType.System => "실행",
+            ActionType.Paste => "붙여넣기",
+            ActionType.SwitchWindow => "창으로 전환",
+            ActionType.Kill => "종료 (두 번)",
             _ => r.Kind switch
             {
                 ResultKind.App => "실행",
@@ -704,10 +808,201 @@ public partial class MainWindow : Window
         };
         var parts = new List<string> { $"↵  {enter}" };
         if (r.RevealPath is not null) parts.Add("Ctrl+↵  폴더에서 보기");
-        if (r.RevealPath is not null || r.Kind is ResultKind.Url) parts.Add("Ctrl+Shift+C  경로 복사");
-        if (r.RevealPath is not null) parts.Add("우클릭  더 보기");
+        if (CanPreview(r)) parts.Add("Space 길게  미리보기");
+        else if (r.Kind is ResultKind.Url) parts.Add("Ctrl+Shift+C  경로 복사");
+        if (r.Kind == ResultKind.Clipboard) parts.Add("Del  기록에서 삭제");
+        if (r.RevealPath is not null) parts.Add("Alt+↵  속성      우클릭  더 보기");
         parts.Add("Esc  닫기");
         FooterText.Text = string.Join("      ", parts);
+    }
+
+    // ---------- preview (hold Space) ----------
+
+    const double PreviewHoldMs = 1000;
+    const double PullDelayMs = 150; // a tap (typing a space) should not make the row twitch
+    readonly System.Windows.Threading.DispatcherTimer _holdTimer = new() { Interval = TimeSpan.FromMilliseconds(PreviewHoldMs) };
+    bool _holding;
+    ListBoxItem? _pulledRow;
+    bool _previewOpen;
+    int _previewGeneration;
+
+    static bool CanPreview(SearchResult r) => r.RevealPath is not null && r.Kind is ResultKind.File or ResultKind.Folder or ResultKind.Path;
+
+    /// <summary>Space went down on a previewable row: start the timer and stretch the row as if it were being pulled.</summary>
+    void StartHold(ResultItem item)
+    {
+        _holding = true;
+        _holdTimer.Start();
+        if (Results.ItemContainerGenerator.ContainerFromItem(item) is not ListBoxItem row) return;
+        _pulledRow = row;
+        var scale = new ScaleTransform();
+        row.RenderTransformOrigin = new Point(0.5, 0.5);
+        row.RenderTransform = scale;
+        // The row swells the longer Space is held, as if about to pop open into the preview.
+        var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+        AnimationTimeline Pull(double to)
+        {
+            var a = Anim(null, to, PreviewHoldMs - PullDelayMs, ease);
+            a.BeginTime = TimeSpan.FromMilliseconds(PullDelayMs);
+            return a;
+        }
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, Pull(1.04));
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, Pull(1.12));
+    }
+
+    void CancelHold()
+    {
+        _holding = false;
+        _holdTimer.Stop();
+        SpringBack();
+    }
+
+    /// <summary>Lets go of the pulled row: it snaps back and wobbles like a released spring.</summary>
+    void SpringBack()
+    {
+        if (_pulledRow?.RenderTransform is not ScaleTransform scale) return;
+        _pulledRow = null;
+        var ease = new ElasticEase { Oscillations = 2, Springiness = 5, EasingMode = EasingMode.EaseOut };
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, Anim(null, 1, 550, ease));
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, Anim(null, 1, 550, ease));
+    }
+
+    void OpenPreview()
+    {
+        if (Selected is not { } item || item.Result.RevealPath is not { } path) return;
+        bool wasOpen = _previewOpen;
+        _previewOpen = true;
+        int generation = ++_previewGeneration;
+        PreviewTitle.Text = item.Title;
+        PreviewInfo.Text = path;
+        PreviewImage.Source = null;
+        PreviewText.Text = "";
+        Results.Visibility = Visibility.Collapsed;
+        PreviewPanel.Visibility = Visibility.Visible;
+        UpdateShape();
+        UpdateFooter();
+        if (!wasOpen)
+        {
+            // Pops out with a little overshoot: the spring that was being pulled.
+            var pop = new BackEase { Amplitude = 0.4, EasingMode = EasingMode.EaseOut };
+            PreviewScale.BeginAnimation(ScaleTransform.ScaleXProperty, Anim(0.9, 1, 340, pop));
+            PreviewScale.BeginAnimation(ScaleTransform.ScaleYProperty, Anim(0.9, 1, 340, pop));
+            PreviewPanel.BeginAnimation(OpacityProperty, Anim(0, 1, 180, new CubicEase { EasingMode = EasingMode.EaseOut }));
+        }
+        _ = LoadPreviewAsync(path, generation);
+    }
+
+    void ClosePreview()
+    {
+        if (!_previewOpen) return;
+        _previewOpen = false;
+        _previewGeneration++;
+        PreviewPanel.Visibility = Visibility.Collapsed;
+        PreviewImage.Source = null;
+        PreviewText.Text = "";
+        Results.Visibility = _items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        UpdateShape();
+        UpdateFooter();
+    }
+
+    async Task LoadPreviewAsync(string path, int generation)
+    {
+        string? text = null;
+        ImageSource? image = null;
+        string info = path;
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                var entries = await Task.Run(() => new DirectoryInfo(path).EnumerateFileSystemInfos().Take(500).ToList());
+                text = entries.Count == 0 ? "(비어 있음)"
+                    : string.Join("\n", entries.OrderByDescending(i => i is DirectoryInfo).ThenBy(i => i.Name)
+                        .Select(i => (i is DirectoryInfo ? "▸ " : "   ") + i.Name));
+                info = $"폴더 · 항목 {entries.Count}{(entries.Count == 500 ? "+" : "")}개 · {path}";
+            }
+            else
+            {
+                var file = new FileInfo(path);
+                info = $"{FileTypeLabel.For(file.Name, false)} · {FormatSize(file.Length)} · 수정 {file.LastWriteTime:yyyy-MM-dd HH:mm}";
+                if (FileTypeLabel.IsPlainText(path)) text = await Task.Run(() => ReadTextHead(path));
+                else if (FileTypeLabel.IsImage(path)) image = await Task.Run(() => LoadImage(path));
+                else if (await RunSta(() => ShellIcons.Get(path, 512, thumbnail: true)) is { } px)
+                    image = Frozen(BitmapSource.Create(px.Width, px.Height, 96, 96, PixelFormats.Pbgra32, null, px.Bgra, px.Width * 4));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException
+                                       or System.Security.SecurityException or InvalidOperationException
+                                       or FormatException or System.Runtime.InteropServices.COMException) // corrupt images
+        {
+            text = "미리 볼 수 없습니다: " + ex.Message;
+        }
+        if (generation != _previewGeneration) return; // closed, or moved on to another item
+        text ??= image is null ? "미리 볼 수 없는 형식입니다" : null;
+        PreviewInfo.Text = info;
+        PreviewText.Text = text ?? "";
+        PreviewText.Visibility = text is null ? Visibility.Collapsed : Visibility.Visible;
+        PreviewImage.Source = image;
+    }
+
+    /// <summary>The first lines of a text file, as UTF-8 or, when that fails, the Korean ANSI code page (CP949).</summary>
+    static string ReadTextHead(string path)
+    {
+        var buffer = new byte[64 * 1024];
+        int n;
+        using (var f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) n = f.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
+        if (n == buffer.Length)
+        {
+            // Cut at 64 KB: drop the last character, which may be a split UTF-8 sequence that would fail the decode.
+            int i = n - 1;
+            while (i > n - 4 && (buffer[i] & 0xC0) == 0x80) i--;
+            if (buffer[i] >= 0xC0) n = i;
+        }
+        string text;
+        try { text = new System.Text.UTF8Encoding(false, throwOnInvalidBytes: true).GetString(buffer, 0, n); }
+        catch (System.Text.DecoderFallbackException)
+        {
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+            text = System.Text.Encoding.GetEncoding(949).GetString(buffer, 0, n);
+        }
+        return string.Join("\n", text.TrimStart('﻿').ReplaceLineEndings("\n").Split('\n').Take(300));
+    }
+
+    static ImageSource LoadImage(string path)
+    {
+        int height;
+        using (var s = File.OpenRead(path))
+            height = BitmapFrame.Create(s, BitmapCreateOptions.DelayCreation, BitmapCacheOption.None).PixelHeight;
+        var bmp = new BitmapImage();
+        bmp.BeginInit();
+        bmp.CacheOption = BitmapCacheOption.OnLoad;
+        if (height > 900) bmp.DecodePixelHeight = 900; // only shrink: decoding a small image at 900 px blows it up
+        bmp.UriSource = new Uri(path);
+        bmp.EndInit();
+        return Frozen(bmp);
+    }
+
+    static T Frozen<T>(T f) where T : Freezable { f.Freeze(); return f; }
+
+    static string FormatSize(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
+        < 1024L * 1024 * 1024 => $"{bytes / 1024.0 / 1024:0.#} MB",
+        _ => $"{bytes / 1024.0 / 1024 / 1024:0.##} GB",
+    };
+
+    /// <summary>Shell thumbnails are COM and want an STA thread; the UI thread must not wait on a slow video thumbnail.</summary>
+    static Task<T> RunSta<T>(Func<T> work)
+    {
+        var tcs = new TaskCompletionSource<T>();
+        var t = new Thread(() =>
+        {
+            try { tcs.SetResult(work()); }
+            catch (Exception ex) { tcs.SetException(ex); }
+        }) { IsBackground = true, Name = "Preview thumbnail" };
+        t.SetApartmentState(ApartmentState.STA);
+        t.Start();
+        return tcs.Task;
     }
 
     // ---------- background activity ----------

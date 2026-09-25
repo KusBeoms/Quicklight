@@ -162,6 +162,27 @@ public sealed class WebSearchProvider(QuicklightSettings settings) : IResultProv
         };
     }
 
-    public Task<IReadOnlyList<SearchResult>> QueryAsync(QueryContext query, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<SearchResult>>(query.IsAlternate ? [] : [Make(query.Text, settings)]);
+    /// <summary>"yt 고양이": the engine keyed "yt" in settings, searching for the rest. Null if the first word is no engine key.</summary>
+    public static SearchResult? MakeKeyword(string text, QuicklightSettings settings)
+    {
+        var parts = text.Trim().Split(' ', 2, StringSplitOptions.TrimEntries);
+        if (parts.Length < 2 || parts[1].Length == 0 || !settings.SearchEngines.TryGetValue(parts[0].ToLowerInvariant(), out var template)) return null;
+        var url = template.Replace("{0}", Uri.EscapeDataString(parts[1]));
+        string engine = Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host.Replace("www.", "") : parts[0];
+        return new SearchResult
+        {
+            Title = $"“{parts[1]}” {engine}에서 검색",
+            Subtitle = $"{parts[0]} 키워드 검색",
+            Kind = ResultKind.WebSearch,
+            Target = url,
+            Score = Scores.KeywordSearch,
+        };
+    }
+
+    public Task<IReadOnlyList<SearchResult>> QueryAsync(QueryContext query, CancellationToken ct)
+    {
+        if (query.IsAlternate) return Task.FromResult<IReadOnlyList<SearchResult>>([]);
+        var keyword = MakeKeyword(query.Text, settings);
+        return Task.FromResult<IReadOnlyList<SearchResult>>(keyword is null ? [Make(query.Text, settings)] : [keyword, Make(query.Text, settings)]);
+    }
 }

@@ -72,7 +72,7 @@ public sealed class AppProvider : IResultProvider
             results.Add(new SearchResult
             {
                 Title = app.Name,
-                Subtitle = app.FilePath ?? "앱",
+                Subtitle = "애플리케이션",
                 Kind = ResultKind.App,
                 Target = app.LaunchTarget,
                 IconSource = app.LaunchTarget,
@@ -86,7 +86,7 @@ public sealed class AppProvider : IResultProvider
             results.Add(new SearchResult
             {
                 Title = Path.GetFileName(exe),
-                Subtitle = exe,
+                Subtitle = "애플리케이션",
                 Kind = ResultKind.App,
                 Target = exe,
                 IconSource = exe,

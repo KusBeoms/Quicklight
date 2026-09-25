@@ -12,16 +12,13 @@ public sealed class ResultItem(SearchResult result, string group) : INotifyPrope
     public string Title => Result.Title;
     public string Subtitle => _subtitleOverride ?? Result.Subtitle;
     public string Glyph => GlyphFor(Result);
-    /// <summary>A direct answer on top (calculation, conversion, translation) is drawn as a large card.</summary>
-    public bool IsHero => Group == HeroGroup && Result.Kind is ResultKind.Calculator or ResultKind.Currency or ResultKind.Translation
+    /// <summary>A direct answer on top (calculation or conversion) is drawn as a large card.</summary>
+    public bool IsHero => Group == HeroGroup && Result.Kind is ResultKind.Calculator or ResultKind.Currency
                           && Result.Action != ActionType.None;
 
     public const string HeroGroup = "최상위 결과";
 
-    /// <summary>Numbers are short and get the biggest type; translations shrink with their length.</summary>
-    public double HeroFontSize => Result.Kind == ResultKind.Translation
-        ? Title.Length switch { <= 24 => 28, <= 60 => 23, <= 140 => 19, _ => 16 }
-        : 34;
+    public double HeroFontSize => 34;
 
     /// <summary>What Enter does on the card.</summary>
     public string HeroHint => "↵ 복사";
@@ -48,7 +45,6 @@ public sealed class ResultItem(SearchResult result, string group) : INotifyPrope
     {
         ResultKind.Calculator => "계산기",
         ResultKind.Currency => "환율",
-        ResultKind.Translation => "번역",
         ResultKind.Url => "웹사이트",
         ResultKind.Path => "경로",
         ResultKind.App => "앱",
@@ -57,6 +53,10 @@ public sealed class ResultItem(SearchResult result, string group) : INotifyPrope
         ResultKind.Folder => "폴더",
         ResultKind.File => "문서",
         ResultKind.WebSearch => "웹 검색",
+        ResultKind.Window => "열린 창",
+        ResultKind.Clipboard => "클립보드",
+        ResultKind.Snippet => "스니펫",
+        ResultKind.Process => "프로세스",
         _ => k.ToString(),
     };
 
@@ -64,7 +64,6 @@ public sealed class ResultItem(SearchResult result, string group) : INotifyPrope
     {
         ResultKind.Calculator => "",
         ResultKind.Currency => "",
-        ResultKind.Translation => "",
         ResultKind.Url => "",
         ResultKind.WebSearch => "",
         ResultKind.Setting => "",
@@ -72,6 +71,10 @@ public sealed class ResultItem(SearchResult result, string group) : INotifyPrope
         ResultKind.File => "",
         ResultKind.Path => "",
         ResultKind.App => "",
+        ResultKind.Window => "",
+        ResultKind.Clipboard => "",
+        ResultKind.Snippet => "",
+        ResultKind.Process => "",
         ResultKind.Command => r.Target switch
         {
             "lock" => "",

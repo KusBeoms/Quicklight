@@ -3,7 +3,6 @@ namespace Quicklight.Core.Models;
 public enum ResultKind
 {
     Calculator,
-    Translation,
     Currency,
     Url,
     Path,
@@ -13,6 +12,10 @@ public enum ResultKind
     Folder,
     File,
     WebSearch,
+    Window,
+    Clipboard,
+    Snippet,
+    Process,
 }
 
 public enum ActionType
@@ -23,12 +26,18 @@ public enum ActionType
     Copy,
     /// <summary>Run a built-in system command identified by <see cref="SearchResult.Target"/>.</summary>
     System,
-    /// <summary>Informational row (e.g. "translating…"): Enter does nothing.</summary>
+    /// <summary>Informational row: Enter does nothing.</summary>
     None,
     /// <summary>Check GitHub Releases and install a newer Quicklight (handled by the launcher).</summary>
     Update,
     /// <summary>Re-runs the search including the system files/folders it left out (handled by the launcher).</summary>
     Expand,
+    /// <summary>Put <see cref="SearchResult.Target"/> (or the clipboard history item) on the clipboard and paste it into the previous window (handled by the launcher).</summary>
+    Paste,
+    /// <summary>Bring the top-level window whose handle is <see cref="SearchResult.Target"/> to the front.</summary>
+    SwitchWindow,
+    /// <summary>End every process named <see cref="SearchResult.Target"/>.</summary>
+    Kill,
 }
 
 public sealed class SearchResult
@@ -46,7 +55,8 @@ public sealed class SearchResult
     public string? IconSource { get; init; }
 
     /// <summary>Stable identity for dedupe and usage learning.</summary>
-    public string Key => $"{Kind switch { ResultKind.Folder or ResultKind.File or ResultKind.Path => "fs", _ => Kind.ToString() }}:{Target.ToLowerInvariant()}";
+    public string Key => $"{Kind switch { ResultKind.Folder or ResultKind.File or ResultKind.Path => "fs", _ => Kind.ToString() }}:{Target.ToLowerInvariant()}"
+                         + (Arguments is null ? "" : " " + Arguments); // same program, different arguments: different results
 
     /// <summary>Destructive commands ask for a second Enter.</summary>
     public bool RequiresConfirmation { get; init; }

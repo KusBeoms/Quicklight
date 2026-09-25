@@ -9,3 +9,5 @@ dist/
 TestResults/
 .library/
 .private/
+CLAUDE.md
+RELEASE.md

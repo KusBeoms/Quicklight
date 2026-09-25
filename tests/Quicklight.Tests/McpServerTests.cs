@@ -48,7 +48,7 @@ public class McpServerTests
     public async Task Lists_tools_and_hides_open_in_read_only_mode()
     {
         var all = (await Create().HandleAsync(Req(1, "tools/list")))!["result"]!["tools"]!.AsArray().Select(t => t!["name"]!.GetValue<string>()).ToList();
-        Assert.Equal(["search", "search_files", "convert_currency", "translate", "calculate", "open", "reveal"], all);
+        Assert.Equal(["search", "search_files", "convert_currency", "calculate", "convert_unit", "date_calc", "list_windows", "recent_files", "open", "reveal"], all);
         var ro = (await Create(false).HandleAsync(Req(1, "tools/list")))!["result"]!["tools"]!.AsArray().Select(t => t!["name"]!.GetValue<string>()).ToList();
         Assert.DoesNotContain("open", ro);
         var denied = await Create(false).HandleAsync(Call(2, "open", new JsonObject { ["target"] = "https://example.com" }));

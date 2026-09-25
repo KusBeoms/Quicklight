@@ -107,6 +107,47 @@ public static class Hangul
         return Compose(jamo);
     }
 
+    /// <summary>
+    /// Vowel typed before its consonant: the IME leaves "ㅏㅈ" instead of "자", "ㅏㅋ카오톡" instead of "카카오톡".
+    /// Swaps each standalone vowel with the standalone consonant after it and recomposes. Returns null if nothing to fix.
+    /// </summary>
+    public static string? FixJamoOrder(string s)
+    {
+        var chars = s.ToCharArray();
+        bool changed = false;
+        for (int i = 0; i + 1 < chars.Length; i++)
+        {
+            if (!IsVowel(chars[i]) || !IsConsonantJamo(chars[i + 1]) || (i > 0 && IsConsonantJamo(chars[i - 1]))) continue;
+            (chars[i], chars[i + 1]) = (chars[i + 1], chars[i]);
+            changed = true;
+            i++;
+        }
+        if (!changed) return null;
+
+        var jamo = new List<char>(chars.Length * 3);
+        foreach (var c in chars)
+        {
+            if (IsSyllable(c))
+            {
+                int i = c - SBase;
+                jamo.Add(Cho[i / NCount]);
+                AddSplit(jamo, Jung[i % NCount / TCount], VowelPairs);
+                var jong = Jong[i % TCount];
+                if (jong.Length > 0) AddSplit(jamo, jong[0], JongPairs);
+            }
+            else if (IsVowel(c)) AddSplit(jamo, c, VowelPairs);
+            else AddSplit(jamo, c, JongPairs);
+        }
+        return Compose(jamo);
+    }
+
+    static void AddSplit(List<char> jamo, char c, Dictionary<(char, char), char> pairs)
+    {
+        foreach (var ((a, b), p) in pairs)
+            if (p == c) { jamo.Add(a); jamo.Add(b); return; }
+        jamo.Add(c);
+    }
+
     static bool IsVowel(char c) => c >= 'ㅏ' && c <= 'ㅣ';
     static int ChoIndex(char c) => Array.IndexOf(Cho, c);
     static int JongIndex(char c) => Array.IndexOf(Jong, c.ToString());

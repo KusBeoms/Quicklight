@@ -28,9 +28,14 @@ public interface IResultProvider
 public static class Scores
 {
     public const double Calculator = 1000;
-    public const double Translation = 980;
-    public const double TranslationPending = 60;
+    public const double Unit = 970;
+    public const double Date = 960;
     public const double Currency = 950;
+    public const double KeywordSearch = 190; // above files and loose app matches, below an app named like the whole query ("g hub")
+    public const double Snippet = 700;
+    public const double Clipboard = 700;
+    public const double Process = 650;
+    public const double WindowBase = 90;
     public const double ExactPath = 900;
     public const double PathCompletion = 850;
     public const double ExplicitUrl = 800;

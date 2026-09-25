@@ -49,11 +49,12 @@ public partial class App : Application
         _settings = QuicklightSettings.Load();
         Theme.Apply(Resources, _settings.Theme);
         _usage = new UsageStore(UsageStore.DefaultPath);
-        _engine = SearchEngine.CreateDefault(_settings, _usage);
+        var clipboard = new ClipboardHistoryProvider();
+        _engine = SearchEngine.CreateDefault(_settings, _usage, [clipboard]);
         _ = _engine.WarmUpAsync();
 
         _updates = new UpdateService(_settings);
-        _window = new MainWindow(_engine, _settings, _updates) { Pinned = e.Args.Contains("--pinned") };
+        _window = new MainWindow(_engine, _settings, _updates, clipboard) { Pinned = e.Args.Contains("--pinned") };
         _window.InitializeHidden();
 
         _hotkey = new HotkeyManager(_window.Handle, () => _window.Toggle());

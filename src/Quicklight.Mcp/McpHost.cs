@@ -23,8 +23,7 @@ public static class McpHost
         var everything = settings.FileSearch ? new EverythingClient(TimeSpan.FromSeconds(15), failFast: false) : null;
         // probeRemotePaths: false, so a prompt-injected "\\\\host\\share" query cannot make us authenticate to that host.
         using var engine = new SearchEngine(settings, usage, everything: everything, fileTimeout: TimeSpan.FromSeconds(31), probeRemotePaths: false,
-            rates: settings.CurrencyConversion ? SearchEngine.CreateRateStore() : null,
-            translator: SearchEngine.CreateTranslator(settings));
+            rates: settings.CurrencyConversion ? SearchEngine.CreateRateStore() : null);
         var server = new McpServer(engine, everything, new McpServer.Options(AllowOpen: !readOnly));
 
         var utf8 = new UTF8Encoding(false);

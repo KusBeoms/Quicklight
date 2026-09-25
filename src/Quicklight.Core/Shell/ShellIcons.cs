@@ -11,14 +11,15 @@ public static class ShellIcons
     /// <summary>
     /// Gets the shell icon for a path or shell parsing name ("shell:AppsFolder\..."). Call from an STA thread.
     /// </summary>
-    public static IconPixels? Get(string parsingName, int size)
+    /// <param name="thumbnail">A content thumbnail (photo, PDF page, video frame) when the shell has one, else the icon.</param>
+    public static IconPixels? Get(string parsingName, int size, bool thumbnail = false)
     {
         var iid = S.IID_IShellItemImageFactory;
         if (S.SHCreateItemFromParsingName(parsingName, IntPtr.Zero, ref iid, out var obj) != 0 || obj is null) return null;
         var factory = (S.IShellItemImageFactory)obj;
         try
         {
-            if (factory.GetImage(new S.SIZE { cx = size, cy = size }, S.SIIGBF.ICONONLY | S.SIIGBF.BIGGERSIZEOK, out var hbm) != 0 || hbm == IntPtr.Zero)
+            if (factory.GetImage(new S.SIZE { cx = size, cy = size }, (thumbnail ? S.SIIGBF.RESIZETOFIT : S.SIIGBF.ICONONLY) | S.SIIGBF.BIGGERSIZEOK, out var hbm) != 0 || hbm == IntPtr.Zero)
                 return null;
             try { return ReadBitmap(hbm); }
             finally { S.DeleteObject(hbm); }

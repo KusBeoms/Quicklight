@@ -4,7 +4,6 @@ using Quicklight.Core.Matching;
 using Quicklight.Core.Models;
 using Quicklight.Core.Providers;
 using Quicklight.Core.Shell;
-using Quicklight.Core.Translation;
 
 namespace Quicklight.Core;
 
@@ -26,15 +25,6 @@ public sealed class SearchEngine : IDisposable
     /// <summary>Exchange rates for currency conversion; null when conversion is not wired in.</summary>
     public ExchangeRateStore? Rates { get; }
 
-    /// <summary>Target for text already in the system language (English by default).</summary>
-    public string SecondaryLanguage => string.IsNullOrWhiteSpace(_settings.SecondaryLanguage) ? "en" : _settings.SecondaryLanguage.Trim().ToLowerInvariant();
-
-    /// <summary>Languages the translation server loads.</summary>
-    public IReadOnlyCollection<string> TranslationLanguages => _settings.TranslationLanguages is { Count: > 0 } l ? l : LibreTranslateClient.DefaultModels;
-
-    /// <summary>Local translation server; null when translation is not wired in.</summary>
-    public ITranslator? Translator { get; }
-
     /// <summary>Where conversions go when no target is given: the setting, or the Windows region's currency for "auto".</summary>
     public string DefaultCurrency => ResolveDefaultCurrency(_settings.DefaultCurrency);
 
@@ -49,7 +39,7 @@ public sealed class SearchEngine : IDisposable
 
     public SearchEngine(QuicklightSettings settings, UsageStore usage, AppProvider? apps = null, EverythingClient? everything = null,
         IEnumerable<IResultProvider>? extraProviders = null, TimeSpan? fileTimeout = null, bool probeRemotePaths = true,
-        ExchangeRateStore? rates = null, ITranslator? translator = null)
+        ExchangeRateStore? rates = null, bool includeWindows = false)
     {
         _settings = settings;
         _usage = usage;
@@ -66,36 +56,22 @@ public sealed class SearchEngine : IDisposable
             new SystemProvider(),
             new WebSearchProvider(settings),
             new UpdateProvider(settings),
+            new UnitProvider(),
+            new DateProvider(),
+            new SnippetProvider(settings),
+            new CustomCommandProvider(settings),
+            new ProcessProvider(),
         ];
+        if (includeWindows) _providers.Add(new WindowProvider());
         if (everything is not null) _providers.Add(new EverythingProvider(everything, settings));
         Rates = rates;
         if (rates is not null) _providers.Add(new CurrencyProvider(rates, settings));
-        Translator = translator;
-        if (translator is not null) _providers.Add(new TranslationProvider(translator, settings));
         if (extraProviders is not null) _providers.AddRange(extraProviders);
     }
 
     /// <summary>Creates an engine wired to the real app index and Everything.</summary>
-    public static SearchEngine CreateDefault(QuicklightSettings settings, UsageStore usage) =>
-        new(settings, usage, new AppProvider(), new EverythingClient(), rates: CreateRateStore(), translator: CreateTranslator(settings));
-
-    /// <summary>LibreTranslate client for the settings, or null when translation is off or the URL is not local.</summary>
-    public static LibreTranslateClient? CreateTranslator(QuicklightSettings settings)
-    {
-        if (!settings.Translation) return null;
-        try
-        {
-            // With nothing installed, the engine installs itself on the first translation (autoInstallTranslation).
-            var installer = settings.AutoInstallTranslation ? new TranslationInstaller() : null;
-            return new LibreTranslateClient(settings.LibreTranslateUrl, LibreTranslateClient.FindServerExe(settings.LibreTranslateDir, installer),
-                settings.TranslationLanguages is { Count: > 0 } l ? l : null, installer: installer);
-        }
-        catch (Exception ex) when (ex is ArgumentException or UriFormatException)
-        {
-            Log.Error("translation disabled", ex);
-            return null;
-        }
-    }
+    public static SearchEngine CreateDefault(QuicklightSettings settings, UsageStore usage, IEnumerable<IResultProvider>? extraProviders = null) =>
+        new(settings, usage, new AppProvider(), new EverythingClient(), extraProviders, rates: CreateRateStore(), includeWindows: true);
 
     public static ExchangeRateStore CreateRateStore() => new(new HttpRateSource(), ExchangeRateStore.DefaultCachePath);
 
@@ -119,6 +95,9 @@ public sealed class SearchEngine : IDisposable
         var alt = Hangul.QwertyToHangul(query) ?? Hangul.HangulToQwerty(query);
         // The layout-converted retry skips Everything: another round-trip per keystroke costs more than it finds.
         if (alt is not null && alt != query) contexts.Add(new QueryContext(alt, IsAlternate: true, Files: FileStage.None));
+        // Vowel typed before its consonant ("ㅏㅈ" -> "자").
+        if (Hangul.FixJamoOrder(query) is { } fixedOrder && fixedOrder != query)
+            contexts.Add(new QueryContext(fixedOrder, IsAlternate: true, Files: FileStage.None));
 
         var tasks = new List<Task<IReadOnlyList<SearchResult>>>();
         foreach (var ctx in contexts)
@@ -131,7 +110,7 @@ public sealed class SearchEngine : IDisposable
         foreach (var r in all.SelectMany(x => x))
         {
             if (kinds is not null && !kinds.Contains(r.Kind)) continue;
-            if (r.Kind is not (ResultKind.Calculator or ResultKind.Currency or ResultKind.Translation or ResultKind.WebSearch))
+            if (!IsTransient(r.Kind))
                 r.Score += _usage.Boost(query, r.Key);
             if (!merged.TryGetValue(r.Key, out var existing) || existing.Score < r.Score)
                 merged[r.Key] = r;
@@ -159,7 +138,7 @@ public sealed class SearchEngine : IDisposable
         var summaries = candidates.Where(r => r.IsSystemSummary).ToList();
         int summarySlots = Math.Min(summaries.Count, Math.Max(0, slots - 1)); // the top hit stays free
 
-        var ordered = candidates.Where(r => r.Kind != ResultKind.WebSearch && !r.IsSystemSummary)
+        var ordered = candidates.Where(r => r != web && !r.IsSystemSummary)
             .OrderByDescending(r => r.Score).ThenBy(r => r.Title.Length).ToList();
 
         int maxFolders = Math.Max(0, settings.MaxFolderResults);
@@ -213,9 +192,13 @@ public sealed class SearchEngine : IDisposable
     /// <summary>Remembers the choice so the same query ranks it higher next time.</summary>
     public void RecordSelection(string query, SearchResult result)
     {
-        if (result.Kind is ResultKind.Calculator or ResultKind.Currency or ResultKind.Translation or ResultKind.WebSearch) return;
+        if (IsTransient(result.Kind)) return;
         _usage.Record(query, result.Key);
     }
+
+    /// <summary>Answers and rows whose identity does not last (a window handle, a clipboard entry): no usage learning.</summary>
+    static bool IsTransient(ResultKind k) =>
+        k is ResultKind.Calculator or ResultKind.Currency or ResultKind.WebSearch or ResultKind.Window or ResultKind.Clipboard or ResultKind.Process;
 
     /// <summary>Runs Open/System actions. Copy actions are the caller's job (clipboard needs a UI thread).</summary>
     public static void Execute(SearchResult r)
@@ -231,8 +214,14 @@ public sealed class SearchEngine : IDisposable
             case ActionType.System:
                 ShellLauncher.RunSystemCommand(r.Target);
                 break;
-            case ActionType.Copy:
-                throw new InvalidOperationException("Copy results are handled by the caller.");
+            case ActionType.SwitchWindow:
+                WindowProvider.Activate(long.Parse(r.Target));
+                break;
+            case ActionType.Kill:
+                ProcessProvider.Kill(r.Target);
+                break;
+            case ActionType.Copy or ActionType.Paste:
+                throw new InvalidOperationException("Copy and paste results are handled by the caller.");
             case ActionType.None:
                 break;
             case ActionType.Update:
@@ -243,6 +232,5 @@ public sealed class SearchEngine : IDisposable
     public void Dispose()
     {
         _everything?.Dispose();
-        (Translator as IDisposable)?.Dispose(); // stops a LibreTranslate server we started
     }
 }

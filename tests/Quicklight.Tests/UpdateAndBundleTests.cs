@@ -5,7 +5,6 @@ using Quicklight.Core.Everything;
 using Quicklight.Core.Models;
 using Quicklight.Core.Providers;
 using Quicklight.Core.Shell;
-using Quicklight.Core.Translation;
 using Quicklight.Core.Update;
 
 namespace Quicklight.Tests;
@@ -296,48 +295,6 @@ public class BundleTests
     }
 
     [Fact]
-    public void Translation_install_is_hash_pinned()
-    {
-        using var s = typeof(TranslationInstaller).Assembly.GetManifestResourceStream("Quicklight.libretranslate-requirements.txt");
-        Assert.NotNull(s);
-        var lines = new StreamReader(s!).ReadToEnd().Split('\n').Where(l => l.Length > 0 && !l.StartsWith('#')).ToList();
-        Assert.Contains(lines, l => l.StartsWith("libretranslate==1.9.6 "));
-        Assert.All(lines, l => Assert.Matches(@"^[A-Za-z0-9._-]+==\S+ --hash=sha256:[0-9a-f]{64}$", l));
-    }
-
-    [Fact]
     public void Everything_goes_to_program_files_not_the_user_profile() =>
         Assert.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), EverythingBootstrap.InstallDir);
-
-    [Fact]
-    public void Python_package_extraction_rejects_path_traversal()
-    {
-        var dir = Directory.CreateTempSubdirectory("ql-py-").FullName;
-        try
-        {
-            var zip = Path.Combine(dir, "evil.nupkg");
-            using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
-            {
-                using (var w = new StreamWriter(archive.CreateEntry("tools/python.exe").Open())) w.Write("MZ");
-                using (var w = new StreamWriter(archive.CreateEntry("tools/../../escaped.txt").Open())) w.Write("x");
-            }
-            Assert.Throws<TranslationException>(() => TranslationInstaller.ExtractTools(zip, Path.Combine(dir, "python")));
-            Assert.False(File.Exists(Path.Combine(dir, "..", "escaped.txt")));
-        }
-        finally { Directory.Delete(dir, true); }
-    }
-
-    [Fact]
-    public void Installer_paths_and_state()
-    {
-        var dir = Directory.CreateTempSubdirectory("ql-tr-").FullName;
-        try
-        {
-            var i = new TranslationInstaller(dir);
-            Assert.False(i.IsInstalled);
-            Assert.Equal(Path.Combine(dir, "python", "Scripts", "libretranslate.exe"), i.ServerExe);
-            Assert.Null(LibreTranslateClient.FindServerExe(Path.Combine(dir, "nope")));
-        }
-        finally { Directory.Delete(dir, true); }
-    }
 }

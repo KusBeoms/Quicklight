@@ -79,7 +79,7 @@ public sealed class EverythingProvider(EverythingClient client, QuicklightSettin
             byPath[full] = new SearchResult
             {
                 Title = item.Name,
-                Subtitle = item.IsFolder ? full : item.Directory,
+                Subtitle = FileTypeLabel.For(item.Name, item.IsFolder),
                 Kind = item.IsFolder ? ResultKind.Folder : ResultKind.File,
                 Target = full,
                 IconSource = full,
@@ -135,7 +135,6 @@ public sealed class EverythingProvider(EverythingClient client, QuicklightSettin
             var age = now - mod;
             s += age.TotalDays < 1 ? 12 : age.TotalDays < 7 ? 8 : age.TotalDays < 30 ? 4 : 0;
         }
-        if (item.IsFolder) s += 4;
         int depth = full.Count(c => c == '\\');
         s -= Math.Min(10, depth * 0.8);
         if (settings.DemotedPaths.Any(d => full.Contains(d, StringComparison.OrdinalIgnoreCase))) s -= 30;

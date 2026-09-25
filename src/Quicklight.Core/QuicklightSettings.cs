@@ -3,6 +3,10 @@ using System.Text.Json.Serialization;
 
 namespace Quicklight.Core;
 
+/// <param name="Path">Program, script or document to open.</param>
+/// <param name="Arguments">Command-line arguments; null for none.</param>
+public sealed record CustomCommand(string Name, string Path, string? Arguments = null, string[]? Aliases = null);
+
 public sealed class QuicklightSettings
 {
     /// <summary>Global hotkey, e.g. "Alt+Space", "Ctrl+Shift+Space", "Win+Alt+K".</summary>
@@ -10,6 +14,21 @@ public sealed class QuicklightSettings
 
     /// <summary>{0} is replaced by the URL-encoded query.</summary>
     public string WebSearchUrl { get; set; } = "https://www.google.com/search?q={0}";
+
+    /// <summary>"yt 고양이" searches with the engine keyed "yt". {0} is replaced by the URL-encoded rest of the query.</summary>
+    public Dictionary<string, string> SearchEngines { get; set; } = new()
+    {
+        ["g"] = "https://www.google.com/search?q={0}",
+        ["yt"] = "https://www.youtube.com/results?search_query={0}",
+        ["nv"] = "https://search.naver.com/search.naver?query={0}",
+        ["w"] = "https://ko.wikipedia.org/w/index.php?search={0}",
+    };
+
+    /// <summary>Text snippets: key -> text. Typing the key (or part of the text) and Enter pastes the text.</summary>
+    public Dictionary<string, string> Snippets { get; set; } = [];
+
+    /// <summary>User-defined commands: a name (and aliases) that runs a program with arguments.</summary>
+    public List<CustomCommand> Commands { get; set; } = [];
 
     public int MaxResults { get; set; } = 12;
 
@@ -44,18 +63,6 @@ public sealed class QuicklightSettings
     /// </summary>
     public string DefaultCurrency { get; set; } = "auto";
 
-    /// <summary>"hello 번역", "사과 영어로": translation with a local LibreTranslate server.</summary>
-    public bool Translation { get; set; } = true;
-
-    /// <summary>Local LibreTranslate server. Only localhost addresses are accepted, so text never leaves the PC.</summary>
-    public string LibreTranslateUrl { get; set; } = "http://127.0.0.1:5055";
-
-    /// <summary>LibreTranslate checkout with a .venv, started on demand. Empty = find ".library\LibreTranslate" near the exe.</summary>
-    public string LibreTranslateDir { get; set; } = "";
-
-    /// <summary>With no LibreTranslate found, download and install one on the first translation (about 1 GB with models).</summary>
-    public bool AutoInstallTranslation { get; set; } = true;
-
     /// <summary>File search: use Quicklight's bundled Everything when none is installed (installs its service once, with consent).</summary>
     public bool BundledEverything { get; set; } = true;
 
@@ -67,12 +74,6 @@ public sealed class QuicklightSettings
 
     /// <summary>Check for a newer release shortly after start and every few hours; install it while the launcher is closed.</summary>
     public bool AutoUpdate { get; set; } = true;
-
-    /// <summary>Language models the server loads (and downloads on first start).</summary>
-    public List<string> TranslationLanguages { get; set; } = ["ko", "en", "ja", "zh"];
-
-    /// <summary>Target for text that is already in the system language ("사과 번역" → English).</summary>
-    public string SecondaryLanguage { get; set; } = "en";
 
     public bool LaunchAtStartup { get; set; } = true;
 

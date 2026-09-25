@@ -19,4 +19,24 @@
     <ProjectReference Include="..\Quicklight.Core\Quicklight.Core.csproj" />
     <ProjectReference Include="..\Quicklight.Mcp\Quicklight.Mcp.csproj" />
   </ItemGroup>
+  <!-- Stamps the wall-clock build time into a generated source file; deterministic builds make the PE timestamp useless.
+       Hooked on CoreCompile (not BeforeBuild) so the WPF wpftmp compile pass sees it too. -->
+  <Target Name="GenerateBuildInfo" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <BuildInfoFile>$(IntermediateOutputPath)BuildInfo.g.cs</BuildInfoFile>
+      <BuildTimeStamp>$([System.DateTime]::Now.ToString("yyMMddHHmm"))</BuildTimeStamp>
+    </PropertyGroup>
+    <ItemGroup>
+      <BuildInfoLines Include="namespace Quicklight%3B" />
+      <BuildInfoLines Include="internal static class BuildInfo" />
+      <BuildInfoLines Include="{" />
+      <BuildInfoLines Include="    public const string Version = &quot;$(Version)&quot;%3B" />
+      <BuildInfoLines Include="    public const string BuildTime = &quot;$(BuildTimeStamp)&quot;%3B" />
+      <BuildInfoLines Include="}" />
+    </ItemGroup>
+    <WriteLinesToFile File="$(BuildInfoFile)" Lines="@(BuildInfoLines)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(BuildInfoFile)" />
+    </ItemGroup>
+  </Target>
 </Project>
