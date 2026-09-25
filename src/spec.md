@@ -23,7 +23,7 @@ tests/Quicklight.Tests xUnit 테스트
 - **내장 Everything 설치 위치**: `C:\Program Files\Quicklight\Everything`. NTFS 색인을 읽는 Everything 서비스는 관리자 권한으로 돌기 때문에, 서비스 파일을 사용자 폴더에 두면 다른 프로그램이 바꿔치기해 관리자 권한을 얻을 수 있습니다. 그래서 설치에 UAC가 한 번 필요합니다.
 - **단축키**: `RegisterHotKey` 로 등록하고, 다른 프로그램이 이미 등록했다면 저수준 키보드 후크로 대신 가로챕니다.
 - **트레이 아이콘**: Windows 11은 새 아이콘을 숨김 영역에 넣습니다. `HKCU\Control Panel\NotifyIconSettings` 의 `IsPromoted` 를 처음 한 번 켜서 작업 표시줄로 꺼내고, 이후에는 사용자의 선택을 따릅니다.
-- **애니메이션**: 모니터 주사율에 맞춰 120/144/240Hz로 재생합니다. 창은 레이어드 창(`AllowsTransparency`) 대신 DWM 프레임 확장(`NativeUi.MakeGpuTransparent`)으로 투명하게 합니다. 레이어드 창은 매 프레임을 CPU로 다시 읽어 와서 프레임이 절반으로 떨어졌습니다. 블러는 패널 내용(`Body`)에만 걸고, 애니메이션 중에는 `TextHintingMode.Animated` 로 글자가 픽셀 격자에 맞춰 흔들리지 않게 합니다.
+- **애니메이션**: 모니터 주사율에 맞춰 120/144/240Hz로 재생합니다. 창은 레이어드 창(`AllowsTransparency`) 대신 DWM 프레임 확장(`NativeUi.MakeGpuTransparent`)으로 투명하게 합니다. 레이어드 창은 매 프레임을 CPU로 다시 읽어 와서 프레임이 절반으로 떨어졌습니다. 블러는 열 때만, 패널 내용(`Body`)에만 겁니다. 닫을 때는 페이드만 합니다. 선명한 글자가 블러된 캐시 비트맵으로 바뀌는 순간 한 프레임 지글거렸습니다. 크기 변화(scale)는 쓰지 않습니다. 캐시된 글자(placeholder, 돋보기)를 픽셀 이하 단위로 다시 샘플링하면 hinting 과 상관없이 지글거렸습니다.
 - **흐린 배경**: 창을 여는 순간의 화면을 캡처해 흐리게 한 것입니다.
 - **환율**: [open.er-api.com](https://www.exchangerate-api.com) 의 하루 단위 기준 환율(약 166개 통화)을 쓰고, 실패하면 유럽중앙은행 기준의 [Frankfurter](https://frankfurter.dev) 로 넘어갑니다. `%LOCALAPPDATA%\Quicklight\rates.json` 에 저장하고 6시간마다 새로 받습니다.
 - **대상 프레임워크**: `Directory.Build.props` 에서 `net8.0-windows10.0.19041.0` (최소 `SupportedOSPlatformVersion` 10.0.17763). 클립보드 기록에 쓰는 WinRT(`Windows.ApplicationModel.DataTransfer.Clipboard`) 프로젝션이 들어와 exe가 커집니다.
