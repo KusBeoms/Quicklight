@@ -63,6 +63,11 @@ public partial class MainWindow : Window
         ((CollectionViewSource)Resources["GroupedResults"]).Source = _items;
         ((CollectionViewSource)Resources["GroupedApps"]).Source = _apps;
         Deactivated += (_, _) => { if (!Pinned) HideLauncher(); };
+        Query.SelectionChanged += (_, _) => SyncCaret();
+        Query.TextChanged += (_, _) => SyncCaret();
+        Query.SizeChanged += (_, _) => SyncCaret();
+        Query.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler((_, _) => SyncCaret()));
+        Query.IsKeyboardFocusedChanged += (_, _) => SyncCaret();
         Activities.ItemsSource = _activities;
         ActivityTracker.Shared.Changed += QueueActivitySync;
         _indexPoll.Tick += (_, _) => _ = PollIndexAsync();
@@ -162,7 +167,7 @@ public partial class MainWindow : Window
     {
         var flow = (RotateTransform)((LinearGradientBrush)Resources["AiFlowBrush"]).RelativeTransform;
         // The box stays (invisible) so it keeps keyboard focus: Esc and typing still work.
-        foreach (var e in new UIElement[] { GlyphBox, Query, Placeholder }) Fade(e, text is null ? 1 : 0);
+        foreach (var e in new UIElement[] { GlyphBox, Query, Placeholder, CaretLayer }) Fade(e, text is null ? 1 : 0);
         if (text is null)
         {
             _thinking = false;
@@ -450,16 +455,12 @@ public partial class MainWindow : Window
     /// <summary>
     /// While animating, the panel content is drawn once into a GPU bitmap, so each frame only scales, fades and blurs
     /// that bitmap instead of redrawing every row. Dropped afterwards so the settled panel is pixel-sharp.
-    /// Text is hinted for motion meanwhile: pixel-snapped glyphs (the placeholder, the search icon) wobble while the
-    /// scale changes.
+    /// Nothing is scaled or moved: resampling the cached glyphs (the placeholder, the search icon) at sub-pixel
+    /// offsets made them shimmer, whatever the hinting.
     /// </summary>
-    void CacheBody(bool on)
-    {
-        Body.CacheMode = on ? new BitmapCache() : null;
-        TextOptions.SetTextHintingMode(Shell, on ? TextHintingMode.Animated : TextHintingMode.Auto);
-    }
+    void CacheBody(bool on) => Body.CacheMode = on ? new BitmapCache { SnapsToDevicePixels = true } : null;
 
-    // Fade in while the content comes into focus (blur → sharp) and the panel settles from a slightly smaller scale.
+    // Fade in while the content comes into focus (blur → sharp).
     // The blur is on the content only: blurring the panel's edge too made it look like it shrank and grew again.
     void AnimateIn()
     {
@@ -470,8 +471,6 @@ public partial class MainWindow : Window
         var blur = new BlurEffect { Radius = 16, RenderingBias = RenderingBias.Performance };
         Body.Effect = blur;
         Shell.BeginAnimation(OpacityProperty, Anim(0, 1, 170, ease));
-        ShellScale.BeginAnimation(ScaleTransform.ScaleXProperty, Anim(0.97, 1, ms, ease));
-        ShellScale.BeginAnimation(ScaleTransform.ScaleYProperty, Anim(0.97, 1, ms, ease));
         var focus = Anim(16, 0, ms, ease);
         // Drop the effect and the cache once sharp: an idle BlurEffect would still cost a render pass per frame.
         focus.Completed += (_, _) =>
@@ -483,19 +482,11 @@ public partial class MainWindow : Window
         blur.BeginAnimation(BlurEffect.RadiusProperty, focus);
     }
 
-    // The same motion in reverse: out of focus, fade out, then hide.
+    // Fade out, then hide. No blur: switching the sharp text to the cached, blurred bitmap flickered for a frame.
     void AnimateOut(Action done)
     {
         _hiding = true;
-        var ease = new CubicEase { EasingMode = EasingMode.EaseIn };
-        const double ms = 160;
-        CacheBody(true);
-        var blur = new BlurEffect { Radius = 0, RenderingBias = RenderingBias.Performance };
-        Body.Effect = blur;
-        blur.BeginAnimation(BlurEffect.RadiusProperty, Anim(0, 16, ms, ease));
-        ShellScale.BeginAnimation(ScaleTransform.ScaleXProperty, Anim(null, 0.97, ms, ease));
-        ShellScale.BeginAnimation(ScaleTransform.ScaleYProperty, Anim(null, 0.97, ms, ease));
-        var fade = Anim(null, 0, ms, ease);
+        var fade = Anim(null, 0, 160, new CubicEase { EasingMode = EasingMode.EaseIn });
         fade.Completed += (_, _) =>
         {
             if (!_hiding) return; // shown again mid-animation
@@ -503,6 +494,36 @@ public partial class MainWindow : Window
             done();
         };
         Shell.BeginAnimation(OpacityProperty, fade);
+    }
+
+    // ---------- caret ----------
+
+    // The native caret is hidden; this bar blinks with a soft fade instead.
+    // Layout is forced first so the character rects are current and the caret keeps up with typing.
+    void SyncCaret()
+    {
+        Query.UpdateLayout();
+        UpdateCaret();
+    }
+
+    void UpdateCaret()
+    {
+        var r = Query.GetRectFromCharacterIndex(Query.CaretIndex);
+        Caret.Visibility = Query.IsKeyboardFocused && !r.IsEmpty ? Visibility.Visible : Visibility.Collapsed;
+        if (Caret.Visibility != Visibility.Visible) return;
+        var p = Query.TranslatePoint(r.TopLeft, CaretLayer);
+        Caret.Height = r.Height;
+        CaretMove.Y = p.Y;
+        CaretMove.X = p.X - 1;
+        // Solid while typing or moving, then blink.
+        var blink = new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever };
+        blink.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+        blink.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(500))));
+        blink.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(700)), new SineEase()));
+        blink.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(900))));
+        blink.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1100)), new SineEase()));
+        Timeline.SetDesiredFrameRate(blink, _frameRate);
+        Caret.BeginAnimation(OpacityProperty, blink);
     }
 
     // ---------- shape ----------

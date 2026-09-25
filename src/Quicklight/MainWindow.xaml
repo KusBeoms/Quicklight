@@ -238,12 +238,9 @@
         </Style>
     </Window.Resources>
 
-    <!-- The margin leaves room for the drop shadow. Opacity and scale are animated on show and hide; the blur only
-         on Body, so the panel's outline stays crisp and its size changes only through the scale. -->
-    <Grid x:Name="Shell" Margin="24" RenderTransformOrigin="0.5,0.25">
-        <Grid.RenderTransform>
-            <ScaleTransform x:Name="ShellScale" ScaleX="1" ScaleY="1" />
-        </Grid.RenderTransform>
+    <!-- The margin leaves room for the drop shadow. Opacity is animated on show and hide; the blur only on Body,
+         so the panel's outline stays crisp. -->
+    <Grid x:Name="Shell" Margin="24">
 
         <Border x:Name="ShadowShape" Background="{DynamicResource SolidPanelBrush}" CornerRadius="31">
             <Border.Effect>
@@ -286,10 +283,17 @@
                                Foreground="{DynamicResource PlaceholderBrush}" VerticalAlignment="Center" HorizontalAlignment="Left"
                                Visibility="Collapsed" />
                     <TextBox Grid.Column="1" x:Name="Query" FontSize="26" BorderThickness="0" Background="Transparent"
-                             Foreground="{DynamicResource TextBrush}" CaretBrush="{DynamicResource TextBrush}"
+                             Foreground="{DynamicResource TextBrush}" CaretBrush="Transparent"
                              SelectionBrush="{DynamicResource AccentBrush}" VerticalAlignment="Center"
                              TextChanged="Query_TextChanged" PreviewKeyDown="Query_PreviewKeyDown" PreviewKeyUp="Query_PreviewKeyUp"
                              InputMethod.PreferredImeState="DoNotCare" />
+                    <Canvas Grid.Column="1" x:Name="CaretLayer" IsHitTestVisible="False">
+                        <Rectangle x:Name="Caret" Width="2" RadiusX="1" RadiusY="1" Fill="{DynamicResource TextBrush}" Visibility="Collapsed">
+                            <Rectangle.RenderTransform>
+                                <TranslateTransform x:Name="CaretMove" />
+                            </Rectangle.RenderTransform>
+                        </Rectangle>
+                    </Canvas>
                     <TextBlock Grid.Column="2" x:Name="Status" FontSize="13" Foreground="{DynamicResource SubtleTextBrush}"
                                VerticalAlignment="Center" Margin="12,0,0,0" />
                     <!-- The AI is working: six turning dots and what it is doing, in place of the search box. -->
