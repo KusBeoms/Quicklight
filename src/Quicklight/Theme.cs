@@ -21,9 +21,9 @@ public static class Theme
 
         if (IsDark)
         {
-            Set(res, "PanelBrush", Color.FromArgb(0xB4, 0x1E, 0x1E, 0x22));
+            Set(res, "PanelBrush", Color.FromArgb(0xF0, 0x05, 0x05, 0x06)); // black, the backdrop only faintly through
             Set(res, "MenuBrush", Color.FromArgb(0xFA, 0x2A, 0x2A, 0x30));
-            Set(res, "SolidPanelBrush", Color.FromArgb(0xF5, 0x26, 0x26, 0x2B));
+            Set(res, "SolidPanelBrush", Color.FromArgb(0xFC, 0x05, 0x05, 0x06));
             Set(res, "TextBrush", Color.FromRgb(0xF2, 0xF2, 0xF4));
             Set(res, "SubtleTextBrush", Color.FromArgb(0xA8, 0xF2, 0xF2, 0xF4));
             Set(res, "PlaceholderBrush", Color.FromArgb(0x70, 0xF2, 0xF2, 0xF4));

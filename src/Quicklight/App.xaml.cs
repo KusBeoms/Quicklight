@@ -91,7 +91,7 @@ public partial class App : Application
         if (updatedFrom is not null) _tray.Notify("Quicklight", $"v{Updater.CurrentVersion.ToString(3)}(으)로 업데이트했습니다.");
 
         _ = SetUpEverythingAsync(userAsked: false);
-        _ = _updates.RunBackgroundAsync(launcherOpen: () => _window.IsVisible);
+        // This build is never updated from the public releases: it would be replaced by one without the AI features.
     }
 
     static string? ArgAfter(string[] args, string name)

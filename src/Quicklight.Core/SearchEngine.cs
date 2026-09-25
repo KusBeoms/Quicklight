@@ -55,12 +55,12 @@ public sealed class SearchEngine : IDisposable
             Apps,
             new SystemProvider(),
             new WebSearchProvider(settings),
-            new UpdateProvider(settings),
             new UnitProvider(),
             new DateProvider(),
             new SnippetProvider(settings),
             new CustomCommandProvider(settings),
             new ProcessProvider(),
+            new Ai.AskAiProvider(settings),
         ];
         if (includeWindows) _providers.Add(new WindowProvider());
         if (everything is not null) _providers.Add(new EverythingProvider(everything, settings));

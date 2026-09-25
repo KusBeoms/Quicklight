@@ -30,6 +30,12 @@ public sealed class QuicklightSettings
     /// <summary>User-defined commands: a name (and aliases) that runs a program with arguments.</summary>
     public List<CustomCommand> Commands { get; set; } = [];
 
+    /// <summary>AI assistant program that questions typed into the launcher are sent to; empty turns the feature off.</summary>
+    public string AiCommand { get; set; } = "";
+
+    /// <summary>Arguments that start <see cref="AiCommand"/> as a text-only chat on stdin/stdout.</summary>
+    public string AiArguments { get; set; } = "--text --mute --online";
+
     public int MaxResults { get; set; } = 12;
 
     /// <summary>Everything-backed file search.</summary>

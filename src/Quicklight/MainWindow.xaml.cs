@@ -10,6 +10,7 @@ using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using Quicklight.Core;
 using Quicklight.Core.Activity;
+using Quicklight.Core.Ai;
 using Quicklight.Core.Everything;
 using Quicklight.Core.Models;
 using Quicklight.Core.Providers;
@@ -22,8 +23,8 @@ public partial class MainWindow : Window
 {
     const string TopHitGroup = ResultItem.HeroGroup;
     const double ShadowMargin = 24;      // DIPs around the panel, room for the drop shadow (matches Shell.Margin)
-    const double MaxPanelHeight = 580;   // DIPs; the bar sits so that a fully expanded panel is centered on screen
-    const double ExpandedRadius = 24;    // corner radius with results; the bare search bar is a pill
+    const double MaxPanelHeight = 660;   // DIPs; the bar sits so that a fully expanded panel is centered on screen
+    const double PanelRadius = 28;       // corner radius once the panel expands; the bare search bar is a pill
     const double BackdropPad = 48;       // DIPs captured beyond the panel so the blur near its edges has real content
     const double BackdropBlur = 14;      // blur strength (Gaussian sigma) of the backdrop, in DIPs
 
@@ -77,6 +78,261 @@ public partial class MainWindow : Window
             SpringBack();
             OpenPreview();
         };
+        BuildDots();
+        _ai = new AiSession(settings);
+        _ai.Line += (kind, text) => Dispatcher.BeginInvoke(() => OnAiLine(kind, text));
+        _ai.AnswerDone += () => Dispatcher.BeginInvoke(OnAiDone);
+        _ai.Failed += msg => Dispatcher.BeginInvoke(() => { if (_aiBusy) { OnAiLine(AiLineKind.Error, msg); OnAiDone(); } });
+    }
+
+    // ---------- AI conversation ----------
+    // As in Siri: after Enter the bar gathers into a small pill with turning dots and what the AI is doing; when the
+    // answer is ready the conversation opens above, and follow-ups are typed in the box below it.
+
+    readonly AiSession _ai;
+    bool _aiMode;
+    bool _aiBusy;
+    bool _compact; // the panel is the thinking pill
+    TextBlock? _aiAnswer; // the answer being written
+    double _backdropLeft; // backdrop offset for the full-width panel
+
+    // Spring-like: quick start, long gentle settle, so steps flow into each other instead of snapping.
+    static readonly IEasingFunction Settle = new ExponentialEase { EasingMode = EasingMode.EaseOut, Exponent = 5 };
+    const double MoveMs = 560;
+
+    /// <summary>Six dots on a circle, fading around it, for the spinner.</summary>
+    void BuildDots()
+    {
+        for (int i = 0; i < 6; i++)
+        {
+            double a = i * Math.PI / 3;
+            var dot = new System.Windows.Shapes.Ellipse { Width = 5, Height = 5, Opacity = 0.2 + i * 0.16 };
+            dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "TextBrush");
+            Canvas.SetLeft(dot, 13 + 9 * Math.Cos(a) - 2.5);
+            Canvas.SetTop(dot, 13 + 9 * Math.Sin(a) - 2.5);
+            Dots.Children.Add(dot);
+        }
+    }
+
+    double FullWidth => Width - 2 * ShadowMargin;
+
+    void Fade(UIElement e, double to, double ms = 260) => e.BeginAnimation(OpacityProperty, Anim(null, to, ms, Settle));
+
+    /// <summary>Animates the panel width: to <paramref name="width"/>, or back to full width when null.</summary>
+    void AnimateWidth(double? width)
+    {
+        double from = Shell.ActualWidth > 0 ? Shell.ActualWidth : FullWidth;
+        double to = width ?? FullWidth;
+        var anim = Anim(from, to, MoveMs, Settle);
+        if (width is null)
+            anim.Completed += (_, _) =>
+            {
+                if (_compact) return; // narrowed again meanwhile
+                Shell.BeginAnimation(WidthProperty, null);
+                Shell.Width = double.NaN;
+            };
+        Shell.Width = to;
+        Shell.BeginAnimation(WidthProperty, anim);
+    }
+
+    /// <summary>The pill just fits the dots and the text, so a longer text widens it.</summary>
+    double PillWidth()
+    {
+        Thinking.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return Math.Clamp(Thinking.DesiredSize.Width + 30 + 28 + 48, 180, FullWidth);
+    }
+
+    void StartAi(string question)
+    {
+        _cts?.Cancel();
+        _aiMode = true;
+        AiLog.Children.Clear();
+        Results.Visibility = Footer.Visibility = AppGrid.Visibility = AiPanel.Visibility = Visibility.Collapsed;
+        Placeholder.Text = "이어서 질문하기";
+        AskHint.Visibility = Visibility.Collapsed;
+        Query.Clear();
+        _compact = true;
+        AddTurn(question);
+        UpdateShape();
+        _ai.Ask(question);
+    }
+
+    /// <summary>Shows the dots and <paramref name="text"/> in place of the search box; null ends it.</summary>
+    void SetAiBusy(string? text)
+    {
+        var flow = (RotateTransform)((LinearGradientBrush)Resources["AiFlowBrush"]).RelativeTransform;
+        // The box stays (invisible) so it keeps keyboard focus: Esc and typing still work.
+        foreach (var e in new UIElement[] { GlyphBox, Query, Placeholder }) Fade(e, text is null ? 1 : 0);
+        if (text is null)
+        {
+            _thinking = false;
+            var hide = Anim(null, 0, 220, Settle);
+            hide.Completed += (_, _) =>
+            {
+                if (_thinking) return; // shown again before the fade ended
+                Thinking.Visibility = AiGlow.Visibility = Visibility.Collapsed;
+                Dots.BeginAnimation(OpacityProperty, null);
+                DotsSpin.BeginAnimation(RotateTransform.AngleProperty, null);
+                flow.BeginAnimation(RotateTransform.AngleProperty, null);
+            };
+            Thinking.BeginAnimation(OpacityProperty, hide);
+            Fade(AiGlow, 0, 400);
+            return;
+        }
+        if (!_thinking)
+        {
+            // First step: text in place, then everything fades in while the panel gathers into the pill.
+            _thinking = true;
+            AiBusyText.Text = text;
+            AiBusyText.BeginAnimation(OpacityProperty, null);
+            AiBusyText.Opacity = 1;
+            Thinking.Visibility = AiGlow.Visibility = Visibility.Visible;
+            Thinking.Opacity = 0;
+            Fade(Thinking, 1, 360);
+            Fade(AiGlow, 0.8, 500);
+            Dots.BeginAnimation(OpacityProperty,
+                new DoubleAnimation(1, 0.45, TimeSpan.FromSeconds(0.9)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever });
+            DotsSpin.BeginAnimation(RotateTransform.AngleProperty,
+                new DoubleAnimation(0, 360, TimeSpan.FromSeconds(1.2)) { RepeatBehavior = RepeatBehavior.Forever });
+            flow.BeginAnimation(RotateTransform.AngleProperty,
+                new DoubleAnimation(0, 360, TimeSpan.FromSeconds(3.2)) { RepeatBehavior = RepeatBehavior.Forever });
+            if (_compact) AnimateWidth(PillWidth());
+            return;
+        }
+        if (AiBusyText.Text == text) return;
+        // A new step: the old words fade out, the pill resizes, the new words fade in.
+        var fadeOut = Anim(null, 0, 150, Settle);
+        fadeOut.Completed += (_, _) =>
+        {
+            AiBusyText.Text = text;
+            if (_compact) AnimateWidth(PillWidth());
+            Fade(AiBusyText, 1, 320);
+        };
+        AiBusyText.BeginAnimation(OpacityProperty, fadeOut);
+    }
+    bool _thinking; // the dots and words are shown (or fading in)
+
+    /// <summary>Spotlight's "— Ask Siri": the hint sits right after the typed question while asking is the top result.</summary>
+    void UpdateAskHint(bool show)
+    {
+        if (!show || _aiMode || Query.Text.Length == 0) { AskHint.Visibility = Visibility.Collapsed; return; }
+        var typed = new FormattedText(Query.Text, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+            new Typeface(Query.FontFamily, Query.FontStyle, Query.FontWeight, Query.FontStretch), Query.FontSize, Brushes.Black,
+            VisualTreeHelper.GetDpi(this).PixelsPerDip);
+        double left = typed.WidthIncludingTrailingWhitespace + 12; // + the text box's own padding and a gap
+        AskHint.Margin = new Thickness(left, 0, 0, 0);
+        AskHint.Visibility = left + AskHint.ActualWidth < Query.ActualWidth ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    static string BusyLabel(string tool) => tool.Split(' ', 2)[0] switch
+    {
+        "screenshot" or "ocr_screen" or "find_text" => "화면 보는 중",
+        _ => "처리하는 중",
+    };
+
+    void OpenAiPanel()
+    {
+        if (_compact) { _compact = false; AnimateWidth(null); }
+        if (AiPanel.Visibility == Visibility.Visible) return;
+        // The conversation grows open above the box (width and height together), then its text fades in.
+        AiPanel.Visibility = Visibility.Visible;
+        AiPanel.Measure(new Size(FullWidth, double.PositiveInfinity));
+        var grow = Anim(0, AiPanel.DesiredSize.Height, MoveMs, Settle);
+        grow.Completed += (_, _) => { AiPanel.BeginAnimation(HeightProperty, null); AiPanel.Height = double.NaN; };
+        AiPanel.Height = AiPanel.DesiredSize.Height;
+        AiPanel.BeginAnimation(HeightProperty, grow);
+        AiPanel.Opacity = 0;
+        var show = Anim(0, 1, 420, Settle);
+        show.BeginTime = TimeSpan.FromMilliseconds(140);
+        AiPanel.BeginAnimation(OpacityProperty, show);
+        UpdateShape();
+    }
+
+    void AiKeyDown(KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Enter:
+                var text = Query.Text.Trim();
+                if (text.Length > 0) // also while busy: the AI may be waiting for "진행" or "취소"
+                {
+                    Query.Clear();
+                    AddTurn(text);
+                    _ai.FollowUp(text);
+                }
+                break;
+            case Key.Escape:
+                if (Query.Text.Length > 0) Query.Clear();
+                else ExitAi();
+                break;
+            case Key.Up or Key.PageUp: AiScroll.ScrollToVerticalOffset(AiScroll.VerticalOffset - 80); break;
+            case Key.Down or Key.PageDown: AiScroll.ScrollToVerticalOffset(AiScroll.VerticalOffset + 80); break;
+            default: return;
+        }
+        e.Handled = true;
+    }
+
+    void AddTurn(string question)
+    {
+        // The question as a chat bubble on the right, the answer as plain text on the left, as in Siri.
+        var bubble = new Border
+        {
+            CornerRadius = new CornerRadius(18),
+            Padding = new Thickness(16, 10, 16, 11),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            MaxWidth = 540,
+            Margin = new Thickness(0, AiLog.Children.Count == 0 ? 0 : 20, 0, 12),
+            Child = new TextBlock { Text = question, FontSize = 15.5, TextWrapping = TextWrapping.Wrap },
+        };
+        bubble.SetResourceReference(Border.BackgroundProperty, "GlyphBackBrush");
+        AiLog.Children.Add(bubble);
+        _aiAnswer = new TextBlock { FontSize = 19, TextWrapping = TextWrapping.Wrap, LineHeight = 29, Visibility = Visibility.Collapsed };
+        AiLog.Children.Add(_aiAnswer);
+        _aiBusy = true;
+        SetAiBusy("생각하는 중");
+        AiScroll.ScrollToEnd();
+        UpdateShape();
+    }
+
+    void OnAiLine(AiLineKind kind, string text)
+    {
+        if (!_aiMode || _aiAnswer is null) return;
+        if (kind == AiLineKind.Tool)
+        {
+            if (_aiBusy) SetAiBusy(BusyLabel(text));
+            return;
+        }
+        // Collected while thinking; shown when the answer is complete.
+        _aiAnswer.Text += (_aiAnswer.Text.Length > 0 ? "\n" : "") + text;
+        _aiAnswer.Visibility = Visibility.Visible;
+    }
+
+    void OnAiDone()
+    {
+        _aiBusy = false;
+        SetAiBusy(null);
+        if (!_aiMode) return;
+        OpenAiPanel();
+        AiScroll.ScrollToEnd();
+        UpdateShape();
+    }
+
+    void ExitAi()
+    {
+        _aiMode = false;
+        _aiBusy = false;
+        _compact = false;
+        SetAiBusy(null);
+        Shell.BeginAnimation(WidthProperty, null);
+        Shell.Width = double.NaN;
+        AiPanel.BeginAnimation(HeightProperty, null);
+        AiPanel.Height = double.NaN;
+        AiPanel.Visibility = Visibility.Collapsed;
+        AiLog.Children.Clear();
+        _aiAnswer = null;
+        Placeholder.Text = "묻거나 검색";
+        Query.Clear();
+        Render([], keepSelection: false); // back to the bare search bar
     }
 
     bool IsGrid => AppGrid.Visibility == Visibility.Visible;
@@ -163,7 +419,7 @@ public partial class MainWindow : Window
         CancelHold();
         ClosePreview();
         if (ActiveList.ContextMenu is { IsOpen: true } menu) menu.IsOpen = false;
-        AnimateOut(() => Hide());
+        AnimateOut(() => { Hide(); if (_aiMode) ExitAi(); });
     }
 
     void CaptureBackdrop(int x, int y, int width, int height, double scale)
@@ -172,7 +428,8 @@ public partial class MainWindow : Window
         try
         {
             Backdrop.Source = ScreenCapture.CaptureBlurred(x - pad, y - pad, width + 2 * pad, height + 2 * pad, scale, BackdropBlur);
-            Canvas.SetLeft(Backdrop, -pad / scale);
+            _backdropLeft = -pad / scale;
+            Canvas.SetLeft(Backdrop, _backdropLeft);
             Canvas.SetTop(Backdrop, -pad / scale);
         }
         catch (Exception ex) { Log.Error("backdrop capture failed", ex); }
@@ -257,12 +514,40 @@ public partial class MainWindow : Window
     {
         var size = Panel.RenderSize;
         if (size.Width <= 0 || size.Height <= 0) return;
+        // A narrowed (centered) panel shows the part of the screen snapshot that is really behind it.
+        Canvas.SetLeft(Backdrop, _backdropLeft - (FullWidth - size.Width) / 2);
         bool lists = Results.Visibility == Visibility.Visible || IsGrid || _previewOpen;
         Separator.Visibility = lists ? Visibility.Visible : Visibility.Collapsed;
-        bool expanded = lists || ActivityPanel.Visibility == Visibility.Visible;
-        double r = expanded ? ExpandedRadius : size.Height / 2;
+        bool expanded = lists || AiPanel.Visibility == Visibility.Visible || ActivityPanel.Visibility == Visibility.Visible;
+        double target = expanded ? PanelRadius : SearchRow.Height / 2;
+        if (target != _radiusTarget)
+        {
+            // The corners ease between pill and panel instead of snapping when the first result appears.
+            _radiusTarget = target;
+            BeginAnimation(ShapeRadiusProperty, Anim(null, target, 300, Settle));
+        }
+        ApplyShape();
+    }
+
+    double _radiusTarget = double.NaN;
+
+    public static readonly DependencyProperty ShapeRadiusProperty = DependencyProperty.Register(
+        nameof(ShapeRadius), typeof(double), typeof(MainWindow), new PropertyMetadata(44.0, (d, _) => ((MainWindow)d).ApplyShape()));
+
+    /// <summary>Corner radius of the panel, animated by <see cref="UpdateShape"/>.</summary>
+    public double ShapeRadius
+    {
+        get => (double)GetValue(ShapeRadiusProperty);
+        set => SetValue(ShapeRadiusProperty, value);
+    }
+
+    void ApplyShape()
+    {
+        var size = Panel.RenderSize;
+        if (size.Width <= 0 || size.Height <= 0) return;
+        double r = Math.Min(ShapeRadius, size.Height / 2);
         Panel.Clip = new RectangleGeometry(new Rect(size), r, r);
-        ShadowShape.CornerRadius = Outline.CornerRadius = new CornerRadius(r);
+        ShadowShape.CornerRadius = Outline.CornerRadius = AiGlowLine.CornerRadius = new CornerRadius(r);
     }
 
     // ---------- searching ----------
@@ -270,6 +555,7 @@ public partial class MainWindow : Window
     void Query_TextChanged(object sender, TextChangedEventArgs e)
     {
         Placeholder.Visibility = Query.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (_aiMode) return; // the box is typing a follow-up, not a search
         Disarm();
         ClosePreview();
         if (AppCatalog.IsCatalogQuery(Query.Text))
@@ -345,6 +631,8 @@ public partial class MainWindow : Window
         if (_armedKey is not null && !ordered.Exists(i => i.Result.Key == _armedKey)) _armedKey = null;
 
         if (ordered.Exists(i => i.Result.Action == ActionType.Update)) _ = CheckForUpdateAsync();
+        if (ordered.Exists(i => i.Result.Action == ActionType.AskAi)) _ai.WarmUp(); // a question is coming: start the assistant now
+        UpdateAskHint(ordered.Count > 0 && ordered[0].Result.Action == ActionType.AskAi);
 
         bool any = _items.Count > 0;
         Separator.Visibility = Results.Visibility = Footer.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
@@ -433,6 +721,7 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
+        if (_aiMode) { AiKeyDown(e); return; }
         if (_previewOpen)
         {
             if (e.Key == Key.Space && e.IsRepeat) { e.Handled = true; return; } // still holding the Space that opened it
@@ -590,6 +879,7 @@ public partial class MainWindow : Window
         var r = item.Result;
         if (r.Action == ActionType.None) return; // informational row
         if (r.Action == ActionType.Update) { _ = RunUpdateAsync(); return; }
+        if (r.Action == ActionType.AskAi) { StartAi(r.Target); return; }
         if (r.Action == ActionType.Expand)
         {
             bool expandFolders = r.Kind == ResultKind.Folder;
@@ -799,6 +1089,7 @@ public partial class MainWindow : Window
             ActionType.Paste => "붙여넣기",
             ActionType.SwitchWindow => "창으로 전환",
             ActionType.Kill => "종료 (두 번)",
+            ActionType.AskAi => "AI에게 묻기",
             _ => r.Kind switch
             {
                 ResultKind.App => "실행",

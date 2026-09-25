@@ -257,10 +257,10 @@ public class UpdaterTests
         finally { File.Delete(elsewhere); Directory.Delete(dir, true); }
     }
 
-    [Theory]
-    [InlineData("update", true)]
-    [InlineData("업데이트", true)]
-    [InlineData(" Update ", true)]
+    [Theory] // this build never updates itself, so the row is gone
+    [InlineData("update", false)]
+    [InlineData("업데이트", false)]
+    [InlineData(" Update ", false)]
     [InlineData("windows update", false)] // that is the Windows settings page
     public async Task Update_row(string query, bool shown)
     {

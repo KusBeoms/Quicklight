@@ -38,6 +38,8 @@ public enum ActionType
     SwitchWindow,
     /// <summary>End every process named <see cref="SearchResult.Target"/>.</summary>
     Kill,
+    /// <summary>Ask the AI assistant the question in <see cref="SearchResult.Target"/> (handled by the launcher).</summary>
+    AskAi,
 }
 
 public sealed class SearchResult
