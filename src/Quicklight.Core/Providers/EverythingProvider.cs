@@ -96,8 +96,8 @@ public sealed class EverythingProvider(EverythingClient client, QuicklightSettin
         // Information, ...): left out by default, one at a time via "system-folders"/"system-files" placeholder
         // rows (Enter re-runs the search with QueryContext.ExpandSystemFolders/Files set).
         var all = byPath.Values;
-        var files = Partition(all, ResultKind.File, query.ExpandSystemFiles, "시스템 파일", "system-files", settings.MaxFileResults);
-        var folders = Partition(all, ResultKind.Folder, query.ExpandSystemFolders, "시스템 폴더", "system-folders", settings.MaxFolderResults);
+        var files = Partition(all, ResultKind.File, query.ExpandSystemFiles, "시스템 파일", "system-files", settings.FileResultLimit);
+        var folders = Partition(all, ResultKind.Folder, query.ExpandSystemFolders, "시스템 폴더", "system-folders", settings.FolderResultLimit);
         return [.. files, .. folders];
     }
 
@@ -137,9 +137,9 @@ public sealed class EverythingProvider(EverythingClient client, QuicklightSettin
         }
         int depth = full.Count(c => c == '\\');
         s -= Math.Min(10, depth * 0.8);
-        if (settings.DemotedPaths.Any(d => full.Contains(d, StringComparison.OrdinalIgnoreCase))) s -= 30;
+        if (settings.DemotedPathsInEffect.Any(d => full.Contains(d, StringComparison.OrdinalIgnoreCase))) s -= 30;
         return s;
     }
 
-    bool IsExcluded(string full) => settings.ExcludedPaths.Any(d => full.Contains(d, StringComparison.OrdinalIgnoreCase));
+    bool IsExcluded(string full) => settings.ExcludedPathsInEffect.Any(d => full.Contains(d, StringComparison.OrdinalIgnoreCase));
 }

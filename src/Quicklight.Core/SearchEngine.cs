@@ -89,15 +89,13 @@ public sealed class SearchEngine : IDisposable
     {
         var query = text.Trim();
         if (query.Length == 0) return [];
-        int max = maxResults ?? _settings.MaxResults;
+        int max = maxResults ?? _settings.ResultLimit;
 
         var contexts = new List<QueryContext> { new(query, Files: files, ExpandSystemFolders: expandSystemFolders, ExpandSystemFiles: expandSystemFiles) };
-        var alt = Hangul.QwertyToHangul(query) ?? Hangul.HangulToQwerty(query);
         // The layout-converted retry skips Everything: another round-trip per keystroke costs more than it finds.
-        if (alt is not null && alt != query) contexts.Add(new QueryContext(alt, IsAlternate: true, Files: FileStage.None));
-        // Vowel typed before its consonant ("ㅏㅈ" -> "자").
-        if (Hangul.FixJamoOrder(query) is { } fixedOrder && fixedOrder != query)
-            contexts.Add(new QueryContext(fixedOrder, IsAlternate: true, Files: FileStage.None));
+        var variants = Variants(query);
+        foreach (var variant in variants.Skip(1))
+            contexts.Add(new QueryContext(variant, IsAlternate: true, Files: FileStage.None));
 
         var tasks = new List<Task<IReadOnlyList<SearchResult>>>();
         foreach (var ctx in contexts)
@@ -111,10 +109,16 @@ public sealed class SearchEngine : IDisposable
         {
             if (kinds is not null && !kinds.Contains(r.Kind)) continue;
             if (!IsTransient(r.Kind))
-                r.Score += _usage.Boost(query, r.Key);
+                r.Score += _usage.Boost(r.Key, query.Length, () => variants.Max(v => FuzzyMatcher.Score(v, r.Title)));
             if (!merged.TryGetValue(r.Key, out var existing) || existing.Score < r.Score)
                 merged[r.Key] = r;
         }
+
+        // A file that belongs to an app on the list (its executable, a desktop shortcut, its installer) is that app: one row.
+        var listedApps = merged.Values.Select(r => r.App).OfType<AppEntry>().ToHashSet();
+        if (listedApps.Count > 0)
+            foreach (var r in merged.Values.Where(r => r.Kind == ResultKind.File && Apps.OwnerOf(r.Target) is { } owner && listedApps.Contains(owner)).ToList())
+                merged.Remove(r.Key);
 
         merged.TryGetValue(WebSearchProvider.Make(query, _settings).Key, out var web);
         return Rank(merged.Values, web, max, _settings);
@@ -141,7 +145,7 @@ public sealed class SearchEngine : IDisposable
         var ordered = candidates.Where(r => r != web && !r.IsSystemSummary)
             .OrderByDescending(r => r.Score).ThenBy(r => r.Title.Length).ToList();
 
-        int maxFolders = Math.Max(0, settings.MaxFolderResults);
+        int maxFolders = Math.Max(0, settings.FolderResultLimit);
         int othersSlots = slots - summarySlots;
         var reserved = ordered.Where(r => r.Kind == ResultKind.Folder && r.NameMatch)
             .Take(Math.Min(Math.Min(ReservedFolderSlots, maxFolders), Math.Max(0, othersSlots - 1))) // the top hit stays free
@@ -153,7 +157,7 @@ public sealed class SearchEngine : IDisposable
         {
             if (others >= othersSlots - reserved.Count) break;
             if (reserved.Contains(r)) continue;
-            if (r.Kind == ResultKind.File && ++files > settings.MaxFileResults) continue;
+            if (r.Kind == ResultKind.File && ++files > settings.FileResultLimit) continue;
             if (r.Kind == ResultKind.Folder && ++folders > maxFolders) continue;
             picked.Add(r);
             others++;
@@ -184,16 +188,29 @@ public sealed class SearchEngine : IDisposable
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
-            Log.Error($"provider {p.Name} failed for '{ctx.Text}'", ex);
+            Log.Error($"provider {p.Name} failed", ex); // not the query: the log must not become a search history
             return [];
         }
     }
 
-    /// <summary>Remembers the choice so the same query ranks it higher next time.</summary>
+    /// <summary>How well the query (or its layout conversion) matches the result's name: what the history keeps instead of the query.</summary>
+    static double Strength(string query, SearchResult r) => Variants(query.Trim()).Max(v => FuzzyMatcher.Score(v, r.Title));
+
+    /// <summary>The query as typed, then its keyboard-layout conversion ("zkzkdhxhr" → "카카오") and its jamo-order fix ("ㅏㅈ" → "자").</summary>
+    static List<string> Variants(string query)
+    {
+        var list = new List<string> { query };
+        if ((Hangul.QwertyToHangul(query) ?? Hangul.HangulToQwerty(query)) is { } alt && !list.Contains(alt)) list.Add(alt);
+        if (Hangul.FixJamoOrder(query) is { } fixedOrder && !list.Contains(fixedOrder)) list.Add(fixedOrder);
+        return list;
+    }
+
+    /// <summary>How well the query (or its layout conversion) matches the result's name: what the history keeps instead of the query.</summary>
+    /// <summary>Remembers the choice so queries like this one rank it higher next time. The query itself is not kept.</summary>
     public void RecordSelection(string query, SearchResult result)
     {
         if (IsTransient(result.Kind)) return;
-        _usage.Record(query, result.Key);
+        _usage.Record(result.Key, query.Trim().Length, Strength(query, result));
     }
 
     /// <summary>Answers and rows whose identity does not last (a window handle, a clipboard entry): no usage learning.</summary>
@@ -206,10 +223,13 @@ public sealed class SearchEngine : IDisposable
         switch (r.Action)
         {
             case ActionType.Open when r.Arguments is not null:
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(r.Target, r.Arguments) { UseShellExecute = true })?.Dispose();
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(r.Target, r.Arguments)
+                    { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(r.Target) ?? "" })?.Dispose();
                 break;
             case ActionType.Open:
-                ShellLauncher.Open(r.Target, r.Kind is ResultKind.File ? Path.GetDirectoryName(r.Target) : null);
+                // Files and programs start in their own folder; a shortcut brings its own.
+                bool inOwnFolder = r.Kind is ResultKind.File || r.Target.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
+                ShellLauncher.Open(r.Target, inOwnFolder ? Path.GetDirectoryName(r.Target) : null);
                 break;
             case ActionType.System:
                 ShellLauncher.RunSystemCommand(r.Target);

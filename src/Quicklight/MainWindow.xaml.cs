@@ -25,6 +25,8 @@ public partial class MainWindow : Window
     const double MaxPanelHeight = 580;   // DIPs; the bar sits so that a fully expanded panel is centered on screen
     const double CardRadius = 31;        // corners of the results card: the same as the search pill
     const double CardOffset = 72;        // DIPs from the top of the pill to the top of the card (62 pill + 10 gap)
+    const double PillWidth = 720;        // the search pill, and the card except on the app screen
+    const double GridCardWidth = 840;    // the card on the app screen: room for one more column (the window leaves space for it)
     const double BackdropPad = 48;       // DIPs captured beyond the panel so the blur near its edges has real content
     const double BackdropBlur = 14;      // blur strength (Gaussian sigma) of the backdrop, in DIPs
 
@@ -35,11 +37,14 @@ public partial class MainWindow : Window
     IntPtr _previousForeground; // where Paste results go
     readonly IconLoader _icons = new(64);
     readonly ObservableCollection<ResultItem> _items = [];
-    readonly ObservableCollection<ResultItem> _apps = [];
+    ObservableCollection<ResultItem> _apps = [];
+    readonly RecentQueries _recent = new(RecentQueries.DefaultPath);
+    readonly ObservableCollection<ResultItem> _parts = []; // the previewed app's parts
     readonly ObservableCollection<ActivityItem> _activities = [];
     readonly System.Windows.Threading.DispatcherTimer _indexPoll = new() { Interval = TimeSpan.FromSeconds(1) };
     ActivityTracker.Handle? _indexActivity;
     int _indexBusyPolls;
+    int _unresponsivePolls;
     int _activitySyncQueued;
     IReadOnlyList<AppEntry>? _catalogSource;
     CancellationTokenSource? _cts;
@@ -62,6 +67,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         ((CollectionViewSource)Resources["GroupedResults"]).Source = _items;
         ((CollectionViewSource)Resources["GroupedApps"]).Source = _apps;
+        PreviewParts.ItemsSource = _parts;
         Deactivated += (_, _) => { if (!Pinned) HideLauncher(); };
         // The window reaches the bottom of the screen so the panel can grow inside it; a click beside the panel closes it.
         MouseDown += (_, e) => { if (!Pinned && e.OriginalSource is Visual v && !BarPanel.IsAncestorOf(v) && !ListPanel.IsAncestorOf(v)) HideLauncher(); };
@@ -79,6 +85,18 @@ public partial class MainWindow : Window
             else _indexPoll.Stop();
         };
         SyncActivities();
+        System.ComponentModel.DependencyPropertyDescriptor.FromProperty(VisibilityProperty, typeof(UIElement))
+            .AddValueChanged(AppGrid, (_, _) => SyncCardWidth());
+        Results.LayoutUpdated += (_, _) => MoveGlass(Results);
+        AppGrid.LayoutUpdated += (_, _) => MoveGlass(AppGrid);
+        PreviewParts.LayoutUpdated += (_, _) => MoveGlass(PreviewParts);
+        // Wheel click opens the selected item, wherever the pointer is.
+        PreviewMouseDown += (_, e) =>
+        {
+            if (e.ChangedButton != MouseButton.Middle || Selected is not { } item) return;
+            e.Handled = true;
+            Execute(item);
+        };
         _holdTimer.Tick += (_, _) =>
         {
             _holdTimer.Stop();
@@ -87,7 +105,8 @@ public partial class MainWindow : Window
         };
     }
 
-    bool IsGrid => AppGrid.Visibility == Visibility.Visible;
+    bool _gridShown; // the all-apps grid, also while a preview covers it
+    bool IsGrid => _gridShown;
     ListBox ActiveList => IsGrid ? AppGrid : Results;
     ResultItem? Selected => ActiveList.SelectedItem as ResultItem;
 
@@ -155,12 +174,9 @@ public partial class MainWindow : Window
         }
         Query.Focus();
         Keyboard.Focus(Query);
-        // Like Spotlight: the previous query stays, selected, so typing replaces it.
-        Query.SelectAll();
         // Wait for the first frame (layout, backdrop upload, bitmap cache) so the slow start is not eaten by the
         // time-based animation, which would otherwise jump ahead.
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () => { if (IsVisible && !_hiding) AnimateIn(); });
-        _ = UpdateStatusAsync();
         _ = _engine.WarmUpAsync();
     }
 
@@ -173,7 +189,11 @@ public partial class MainWindow : Window
         CancelHold();
         ClosePreview();
         if (ActiveList.ContextMenu is { IsOpen: true } menu) menu.IsOpen = false;
-        AnimateOut(() => Hide());
+        AnimateOut(() =>
+        {
+            Hide();
+            Query.Clear(); // the next opening starts empty (↑ brings back recent queries)
+        });
     }
 
     void CaptureBackdrop(int x, int y, int width, int height, double scale)
@@ -183,10 +203,11 @@ public partial class MainWindow : Window
         {
             // One snapshot from the pill down to the screen's bottom; the card shows the part under itself.
             Backdrop.Source = ListBackdrop.Source = ScreenCapture.CaptureBlurred(x - pad, y - pad, width + 2 * pad, height + 2 * pad, scale, BackdropBlur);
-            Canvas.SetLeft(Backdrop, -pad / scale);
-            Canvas.SetTop(Backdrop, -pad / scale);
-            Canvas.SetLeft(ListBackdrop, -pad / scale);
-            Canvas.SetTop(ListBackdrop, -pad / scale - CardOffset);
+            _backdropPad = pad / scale;
+            Canvas.SetLeft(Backdrop, -_backdropPad - (ShellWidth - PillWidth) / 2);
+            Canvas.SetTop(Backdrop, -_backdropPad);
+            Canvas.SetTop(ListBackdrop, -_backdropPad - CardOffset);
+            PlaceListBackdrop();
         }
         catch (Exception ex) { Log.Error("backdrop capture failed", ex); }
     }
@@ -285,6 +306,22 @@ public partial class MainWindow : Window
 
     // ---------- shape ----------
 
+    double _backdropPad;
+    double ShellWidth => Width - 2 * ShadowMargin;
+
+    /// <summary>The card is centered in the shell; its backdrop stays put on screen as the card widens.</summary>
+    void PlaceListBackdrop() => Canvas.SetLeft(ListBackdrop, -_backdropPad - (ShellWidth - ListSurface.ActualWidth) / 2);
+
+    void ListSurface_SizeChanged(object sender, SizeChangedEventArgs e) { if (e.WidthChanged) PlaceListBackdrop(); }
+
+    /// <summary>On the app screen the card widens (and, through the taller grid, grows) to show more apps.</summary>
+    void SyncCardWidth()
+    {
+        double w = AppGrid.Visibility == Visibility.Visible || _clipMode ? GridCardWidth : PillWidth;
+        if (!IsVisible) { ListSurface.BeginAnimation(WidthProperty, null); ListSurface.Width = w; return; }
+        ListSurface.BeginAnimation(WidthProperty, Anim(null, w, 260, new CubicEase { EasingMode = EasingMode.EaseOut }));
+    }
+
     void ListPanel_SizeChanged(object sender, SizeChangedEventArgs e) =>
         ListPanel.Clip = new RectangleGeometry(new Rect(e.NewSize), CardRadius, CardRadius);
 
@@ -328,14 +365,21 @@ public partial class MainWindow : Window
         {
             _cts?.Cancel();
             _lastQuery = Query.Text.Trim();
-            ShowCatalog();
+            // Laying out every tile takes a moment: let the keystrokes already waiting in first ("app" → "apple").
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
+            {
+                if (IsVisible && AppCatalog.IsCatalogQuery(Query.Text)) ShowCatalog();
+            });
             return;
         }
-        if (IsGrid) AppGrid.Visibility = Visibility.Collapsed;
-        _ = RunSearchAsync(Query.Text);
+        if (IsGrid) { AppGrid.Visibility = Visibility.Collapsed; _gridShown = false; }
+        var scoped = AppCatalog.ScopedQuery(Query.Text); // "app apple music": apps only
+        _ = RunSearchAsync(scoped ?? Query.Text, appsOnly: scoped is not null);
     }
 
-    async Task RunSearchAsync(string text, bool expandSystemFolders = false, bool expandSystemFiles = false)
+    static readonly HashSet<ResultKind> AppsOnly = [ResultKind.App];
+
+    async Task RunSearchAsync(string text, bool expandSystemFolders = false, bool expandSystemFiles = false, bool appsOnly = false)
     {
         // Safe to dispose right after Cancel: the previous search only ever checks an already-cancelled token.
         _cts?.Cancel();
@@ -351,25 +395,40 @@ public partial class MainWindow : Window
         try
         {
             // Instant providers first; files slot in as Everything answers (fast name-prefix pass, then the full pass).
-            var fast = await _engine.SearchAsync(text, ct: token, files: FileStage.None,
-                expandSystemFolders: expandSystemFolders, expandSystemFiles: expandSystemFiles);
-            if (token.IsCancellationRequested) return;
+            var kinds = appsOnly ? AppsOnly : null;
+            var fast = await SearchOffUiAsync(text, FileStage.None, expandSystemFolders, expandSystemFiles, kinds, token);
+            if (fast is null) return;
             Render(fast, keepSelection: false);
             // Later passes bring files; skip them when file search is off.
-            if (_lastQuery.Length < 2 || !_settings.FileSearch) return;
+            if (appsOnly || _lastQuery.Length < 2 || !_settings.FileSearch) return;
 
-            await Task.Delay(60, token); // debounce the Everything round-trips while typing
+            // Wait for a pause in typing: every Everything query takes its whole index (about a second on a big one),
+            // and one per keystroke kept it so busy that Windows took it for hung.
+            await Task.Delay(200, token);
             IReadOnlyList<SearchResult> results = fast;
             foreach (var stage in new[] { FileStage.Prefix, FileStage.Full })
             {
-                results = await _engine.SearchAsync(text, ct: token, files: stage,
-                    expandSystemFolders: expandSystemFolders, expandSystemFiles: expandSystemFiles);
-                if (token.IsCancellationRequested) return;
-                Render(results, keepSelection: true);
+                if (await SearchOffUiAsync(text, stage, expandSystemFolders, expandSystemFiles, kinds, token) is not { } staged) return;
+                Render(results = staged, keepSelection: true);
             }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { Log.Error("search failed", ex); }
+    }
+
+    /// <summary>
+    /// Runs the search on the thread pool, so matching and ranking never hold up typing, then comes back only once the
+    /// keystrokes already waiting have been handled: the card is drawn after the search box has caught up. Null when a
+    /// newer query took over meanwhile.
+    /// </summary>
+    async Task<IReadOnlyList<SearchResult>?> SearchOffUiAsync(string text, FileStage files, bool expandSystemFolders, bool expandSystemFiles,
+        ISet<ResultKind>? kinds, CancellationToken token)
+    {
+        var results = await Task.Run(() => _engine.SearchAsync(text, ct: token, files: files, kinds: kinds,
+            expandSystemFolders: expandSystemFolders, expandSystemFiles: expandSystemFiles), token);
+        if (token.IsCancellationRequested) return null;
+        await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.Background);
+        return token.IsCancellationRequested ? null : results;
     }
 
     void Render(IReadOnlyList<SearchResult> results, bool keepSelection)
@@ -379,9 +438,9 @@ public partial class MainWindow : Window
 
         // Top hit first, then one section per kind in order of each kind's best result.
         var ordered = new List<ResultItem>();
-        if (results.Count > 0) ordered.Add(new ResultItem(results[0], TopHitGroup));
+        if (results.Count > 0) ordered.Add(NewItem(results[0], TopHitGroup));
         foreach (var group in results.Skip(1).GroupBy(r => ResultItem.KindLabel(r.Kind)))
-            ordered.AddRange(group.Select(r => new ResultItem(r, group.Key)));
+            ordered.AddRange(group.Select(r => NewItem(r, group.Key)));
 
         _items.Clear();
         int generation = _icons.NextGeneration();
@@ -399,11 +458,32 @@ public partial class MainWindow : Window
         if (ordered.Exists(i => i.Result.Action == ActionType.Update)) _ = CheckForUpdateAsync();
 
         bool any = _items.Count > 0;
+        SetClipMode(any && ordered.TrueForAll(i => i.Result.Kind == ResultKind.Clipboard));
         Results.Visibility = Footer.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
         if (_previewOpen) Results.Visibility = Visibility.Collapsed; // a later file stage while the preview is open
         if (!any) return;
         int index = selectedKey is null ? 0 : Math.Max(0, ordered.FindIndex(i => i.Result.Key == selectedKey));
         Select(index, disarm: false);
+    }
+
+    ResultItem NewItem(SearchResult r, string group) => new(r, group)
+    {
+        Body = r.Kind == ResultKind.Clipboard && _clipboard.Text(r.Target) is { } text
+            ? (text.Length > 600 ? text[..600] : text).ReplaceLineEndings("\n").Trim('\n')
+            : null,
+    };
+
+    bool _clipMode;
+
+    /// <summary>The clipboard history gets the app screen's room: the wide card and a taller list of large cards.</summary>
+    void SetClipMode(bool on)
+    {
+        if (_clipMode == on) return;
+        _clipMode = on;
+        Results.MaxHeight = on ? AppGrid.Height : 500;
+        Results.Height = on ? AppGrid.Height : double.NaN;
+        PreviewPanel.Height = on ? AppGrid.Height - 20 : 440;
+        SyncCardWidth();
     }
 
     void LoadIcon(ResultItem item, int generation)
@@ -414,7 +494,7 @@ public partial class MainWindow : Window
         _icons.Load(src, isFolder, generation, img =>
         {
             if (Dispatcher.CheckAccess()) item.Icon = img;
-            else Dispatcher.BeginInvoke(() => item.Icon = img);
+            else Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () => item.Icon = img); // after typing
         });
     }
 
@@ -427,18 +507,8 @@ public partial class MainWindow : Window
         {
             // Build once per app index; the tiles keep their icons between openings.
             _catalogSource = source;
-            _apps.Clear();
-            foreach (var section in AppCatalog.Build(source))
-                foreach (var app in section.Apps)
-                    _apps.Add(new ResultItem(new SearchResult
-                    {
-                        Title = app.Name,
-                        Subtitle = "애플리케이션",
-                        Kind = ResultKind.App,
-                        Target = app.LaunchTarget,
-                        IconSource = app.LaunchTarget,
-                        RevealPath = app.FilePath,
-                    }, section.Name));
+            _apps = new(AppCatalog.Build(source).SelectMany(s => s.Apps.Select(app => new ResultItem(AppProvider.ToResult(app), s.Name))));
+            ((CollectionViewSource)Resources["GroupedApps"]).Source = _apps; // one reset instead of a regrouping per tile
         }
         int generation = _icons.NextGeneration();
         foreach (var item in _apps) LoadIcon(item, generation);
@@ -446,6 +516,7 @@ public partial class MainWindow : Window
         _items.Clear();
         Results.Visibility = Visibility.Collapsed;
         AppGrid.Visibility = Footer.Visibility = Visibility.Visible;
+        _gridShown = true;
         if (_apps.Count == 0) { FooterText.Text = "앱 목록을 읽는 중입니다…"; return; }
         AppGrid.SelectedIndex = 0;
         AppGrid.ScrollIntoView(AppGrid.SelectedItem);
@@ -476,10 +547,16 @@ public partial class MainWindow : Window
         var mods = Keyboard.Modifiers;
         // Another key while Space is still down: the Space was a tap, so it goes in first to keep the typing order.
         if (_holding && e.Key != Key.Space) FinishHold();
-        // Alt+. : Everything's own settings (indexed folders and drives, exclusions). With Alt held WPF reports Key.System.
+        // Alt+. : Quicklight settings. Alt+Shift+. : Everything's own settings (indexed folders and drives, exclusions).
+        // With Alt held WPF reports Key.System.
         if (e.Key == Key.System && e.SystemKey == Key.OemPeriod)
         {
-            _ = OpenEverythingOptionsAsync();
+            if (mods.HasFlag(ModifierKeys.Shift)) _ = OpenEverythingOptionsAsync();
+            else
+            {
+                HideLauncher();
+                ((App)Application.Current).OpenSettings();
+            }
             e.Handled = true;
             return;
         }
@@ -487,7 +564,12 @@ public partial class MainWindow : Window
         {
             if (e.Key == Key.Space && e.IsRepeat) { e.Handled = true; return; } // still holding the Space that opened it
             if (e.Key is Key.Escape or Key.Space) { ClosePreview(); e.Handled = true; return; }
-            if (e.Key is Key.Up or Key.Down)
+            if (_parts.Count > 0) // an app: ↑↓ pick one of its parts, Enter runs it
+            {
+                if (e.Key is Key.Up or Key.Down) { SelectIn(PreviewParts, PreviewParts.SelectedIndex + (e.Key == Key.Down ? 1 : -1)); e.Handled = true; return; }
+                if (e.Key == Key.Enter && mods == ModifierKeys.None && PreviewParts.SelectedItem is ResultItem part) { Execute(part); e.Handled = true; return; }
+            }
+            else if (e.Key is Key.Up or Key.Down && !IsGrid)
             {
                 Select(Results.SelectedIndex + (e.Key == Key.Down ? 1 : -1));
                 if (Selected is { } next && CanPreview(next.Result)) OpenPreview();
@@ -496,10 +578,17 @@ public partial class MainWindow : Window
                 return;
             }
         }
-        // Holding Space on a file or folder opens its preview; a tap still types a space.
-        if (e.Key == Key.Space && mods == ModifierKeys.None && !IsGrid && Selected is { } held && CanPreview(held.Result))
+        // Holding Space on a file, folder or app opens its preview; a tap still types a space.
+        if (e.Key == Key.Space && mods == ModifierKeys.None && Selected is { } held && CanPreview(held.Result))
         {
             if (!e.IsRepeat && !_holding) StartHold(held);
+            e.Handled = true;
+            return;
+        }
+        // Like a terminal: ↑ in an empty box brings back the last query, again for older ones; ↓ goes back toward empty.
+        if (e.Key is Key.Up or Key.Down && mods == ModifierKeys.None && BrowsingRecent && (e.Key == Key.Up || Query.Text.Length > 0))
+        {
+            RecallQuery(e.Key == Key.Up ? 1 : -1);
             e.Handled = true;
             return;
         }
@@ -511,8 +600,8 @@ public partial class MainWindow : Window
             case Key.Left when IsGrid: SelectIn(AppGrid, AppGrid.SelectedIndex - 1); e.Handled = true; break;
             case Key.Down: Select(Results.SelectedIndex + 1); e.Handled = true; break;
             case Key.Up: Select(Results.SelectedIndex - 1); e.Handled = true; break;
-            case Key.PageDown: SelectIn(ActiveList, ActiveList.SelectedIndex + (IsGrid ? 21 : 5)); e.Handled = true; break;
-            case Key.PageUp: SelectIn(ActiveList, ActiveList.SelectedIndex - (IsGrid ? 21 : 5)); e.Handled = true; break;
+            case Key.PageDown: SelectIn(ActiveList, ActiveList.SelectedIndex + (IsGrid ? 24 : 5)); e.Handled = true; break;
+            case Key.PageUp: SelectIn(ActiveList, ActiveList.SelectedIndex - (IsGrid ? 24 : 5)); e.Handled = true; break;
             case Key.Enter when mods == (ModifierKeys.Control | ModifierKeys.Shift):
                 if (Selected is { } toElevate && ShellLauncher.CanRunAsAdmin(toElevate.Result.RevealPath ?? toElevate.Result.Target))
                     RunAsAdmin(toElevate, toElevate.Result.RevealPath ?? toElevate.Result.Target);
@@ -539,6 +628,30 @@ public partial class MainWindow : Window
                 if (Selected is { } toCopy) CopyPath(toCopy);
                 e.Handled = true; break;
         }
+    }
+
+    /// <summary>
+    /// ↑↓ go through the recent queries while the box is empty or its whole text is selected: a recalled query comes in
+    /// selected, and Ctrl+A or dragging over all of it goes back to browsing. Any caret or partial selection moves among the results.
+    /// </summary>
+    bool BrowsingRecent => Query.Text.Length == 0 || Query.SelectionLength == Query.Text.Length;
+
+    /// <summary>Puts the next older (+1) or newer (-1) recent query in the box, selected; past the newest the box is empty again.</summary>
+    void RecallQuery(int step)
+    {
+        int at = Query.Text.Length == 0 ? -1 : IndexOfRecent(Query.Text);
+        if (at < 0 && Query.Text.Length > 0 && step < 0) return; // not a recent query: nothing newer than it
+        int i = at + step;
+        if (i >= _recent.Items.Count) return; // the oldest is showing
+        Query.Text = i < 0 ? "" : _recent.Items[i];
+        Query.SelectAll();
+    }
+
+    int IndexOfRecent(string text)
+    {
+        for (int i = 0; i < _recent.Items.Count; i++)
+            if (_recent.Items[i] == text.Trim()) return i;
+        return -1;
     }
 
     void Query_PreviewKeyUp(object sender, KeyEventArgs e)
@@ -575,6 +688,28 @@ public partial class MainWindow : Window
         UpdateFooter();
         if (e.ClickCount >= 2) Execute(item);
         Query.Focus();
+    }
+
+    int _wheel;
+
+    /// <summary>The wheel moves the selection in the results, one item per notch, instead of scrolling. The app grid scrolls.</summary>
+    void List_PreviewMouseWheel(object sender, MouseWheelEventArgs e) => WheelSelect(Results, e);
+
+    void WheelSelect(ListBox list, MouseWheelEventArgs e)
+    {
+        e.Handled = true;
+        _wheel += e.Delta; // precision touchpads send fractions of a notch
+        for (; Math.Abs(_wheel) >= Mouse.MouseWheelDeltaForOneLine; _wheel -= Math.Sign(_wheel) * Mouse.MouseWheelDeltaForOneLine)
+            SelectIn(list, list.SelectedIndex + (_wheel > 0 ? -1 : 1));
+    }
+
+    /// <summary>Over the preview the wheel moves the selection among an app's parts, like ↑↓; a file's or folder's text scrolls.</summary>
+    void PreviewPanel_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (_parts.Count > 0) { WheelSelect(PreviewParts, e); return; }
+        if (!PreviewText.IsVisible) return;
+        PreviewText.ScrollToVerticalOffset(PreviewText.VerticalOffset - e.Delta / (double)Mouse.MouseWheelDeltaForOneLine * 48); // three 16 px lines per notch
+        e.Handled = true;
     }
 
     void List_PreviewMouseRightButtonUp(object sender, MouseButtonEventArgs e)
@@ -618,6 +753,8 @@ public partial class MainWindow : Window
             Add("", "경로 복사", () => CopyPath(item));
             Add("", "속성", () => ShowProperties(item));
         }
+        if (r.App?.Part(AppPartKind.Installer) is { } installer) Add("", "설치 파일 실행", () => RunDirectly(AppProvider.PartResult(r.App, installer)));
+        if (r.App?.Part(AppPartKind.Uninstaller) is { } uninstaller) Add("", "제거", () => RunDirectly(AppProvider.PartResult(r.App, uninstaller)));
         return menu;
     }
 
@@ -629,8 +766,82 @@ public partial class MainWindow : Window
         index = Math.Clamp(index, 0, list.Items.Count - 1);
         if (disarm && list.SelectedIndex != index) Disarm();
         list.SelectedIndex = index;
-        list.ScrollIntoView(list.SelectedItem);
+        // The first item of a section brings its section header into view too.
+        bool firstInGroup = index == 0 || ((ResultItem)list.Items[index - 1]).Group != ((ResultItem)list.Items[index]).Group;
+        if (firstInGroup && list.ItemContainerGenerator.ContainerFromIndex(index) is ListBoxItem c && c.IsArrangeValid)
+            c.BringIntoView(new Rect(0, -GroupHeaderHeight, c.ActualWidth, c.ActualHeight + GroupHeaderHeight));
+        else list.ScrollIntoView(list.SelectedItem);
         UpdateFooter();
+    }
+
+    const double GroupHeaderHeight = 30; // GroupHeader (margin and text) plus the list's top padding
+
+    readonly Dictionary<ListBox, Rect> _glassAt = [];
+
+    /// <summary>Glides the list's glass pane onto the selected item.</summary>
+    void MoveGlass(ListBox list)
+    {
+        if (list.Template.FindName("Glass", list) is not Grid glass || list.Template.FindName("GlassHost", list) is not Grid host) return;
+        if (!list.IsVisible || list.ItemContainerGenerator.ContainerFromIndex(list.SelectedIndex) is not ListBoxItem c
+            || VisualTreeHelper.GetParent(c) is not Visual parent || !host.IsAncestorOf(c))
+        {
+            glass.Visibility = Visibility.Hidden;
+            _glassAt.Remove(list);
+            return;
+        }
+        UpdateLens(list, glass);
+        // Layout position only: the Space-hold swell (a render transform on the row) is shared with the glass instead.
+        var at = new Rect(parent.TransformToVisual(host).Transform((Point)VisualTreeHelper.GetOffset(c)), c.RenderSize);
+        if (_glassAt.TryGetValue(list, out var was) && was == at) return;
+        _glassAt[list] = at;
+
+        bool slide = glass.Visibility == Visibility.Visible;
+        glass.Visibility = Visibility.Visible;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut }; // about CSS "transition: all .3s ease"
+        void To(DependencyProperty p, double v)
+        {
+            if (slide) glass.BeginAnimation(p, Anim(null, v, 300, ease));
+            else { glass.BeginAnimation(p, null); glass.SetValue(p, v); }
+        }
+        To(Canvas.LeftProperty, at.X);
+        To(Canvas.TopProperty, at.Y);
+        To(WidthProperty, at.Width);
+        To(HeightProperty, at.Height);
+    }
+
+    const double LensZoom = 1.12;
+
+    /// <summary>
+    /// Shows the blurred backdrop behind the glass, magnified about its center, as if seen through a lens. Runs on
+    /// every layout pass, so it follows the glass while it slides and the list while it scrolls.
+    /// </summary>
+    void UpdateLens(ListBox list, Grid glass)
+    {
+        if (list.Template.FindName("GlassLens", list) is not Border lens || list.Template.FindName("GlassLight", list) is not Grid light) return;
+        // The inner light is blurred; keep it inside the rounded pane.
+        var size = glass.RenderSize;
+        if (light.Clip is not RectangleGeometry clip || clip.Rect.Size != size)
+            light.Clip = new RectangleGeometry(new Rect(size), 12, 12);
+
+        if (ListBackdrop.Source is null || !ListBackdrop.IsVisible || size.Width == 0) { lens.Background = null; return; }
+        var seen = glass.TransformToVisual(ListBackdrop).TransformBounds(new Rect(size));
+        Rect viewbox;
+        if ((lens.Effect ??= GlassRefraction.TryCreate()) is GlassRefraction refraction)
+        {
+            // The shader magnifies and bends; it gets the backdrop behind the pane plus a margin to bend in.
+            lens.CornerRadius = new CornerRadius(0); // the shader cuts the rounded shape itself
+            refraction.Width = size.Width;
+            refraction.Height = size.Height;
+            viewbox = Rect.Inflate(seen, GlassRefraction.Margin * seen.Width / size.Width, GlassRefraction.Margin * seen.Height / size.Height);
+        }
+        else
+        {
+            double w = seen.Width / LensZoom, h = seen.Height / LensZoom;
+            viewbox = new Rect(seen.X + (seen.Width - w) / 2, seen.Y + (seen.Height - h) / 2, w, h);
+        }
+        if (lens.Background is not VisualBrush brush)
+            lens.Background = brush = new VisualBrush(ListBackdrop) { ViewboxUnits = BrushMappingMode.Absolute, Stretch = Stretch.Fill };
+        if (brush.Viewbox != viewbox) brush.Viewbox = viewbox;
     }
 
     // ---------- actions ----------
@@ -655,6 +866,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        _recent.Add(Query.Text);
         if (r.Action == ActionType.Paste)
         {
             _ = PasteAsync(r);
@@ -688,6 +900,15 @@ public partial class MainWindow : Window
         NativeUi.SendPaste();
     }
 
+    /// <summary>An app's installer or uninstaller chosen in the context menu: the click is the confirmation.</summary>
+    void RunDirectly(SearchResult r)
+    {
+        _recent.Add(Query.Text);
+        HideLauncher();
+        try { SearchEngine.Execute(r); }
+        catch (Exception ex) { ShowError("실행하지 못했습니다", r.Target, ex); }
+    }
+
     void ShowProperties(ResultItem item)
     {
         if (item.Result.RevealPath is not { } path) return;
@@ -698,6 +919,8 @@ public partial class MainWindow : Window
     async Task ShowAndSearchExpandedAsync(string query, bool folders, bool files)
     {
         ShowLauncher();
+        Query.Text = query;
+        Query.CaretIndex = query.Length;
         await RunSearchAsync(query, folders, files);
     }
 
@@ -705,6 +928,7 @@ public partial class MainWindow : Window
     {
         HideLauncher();
         _engine.RecordSelection(_lastQuery, item.Result);
+        _recent.Add(Query.Text);
         try { ShellLauncher.RunAsAdmin(path); }
         catch (Exception ex) { ShowError("관리자 권한으로 실행하지 못했습니다", path, ex); }
     }
@@ -714,6 +938,7 @@ public partial class MainWindow : Window
         if (item.Result.RevealPath is not { } path) return;
         HideLauncher();
         _engine.RecordSelection(_lastQuery, item.Result);
+        _recent.Add(Query.Text);
         try { ShellLauncher.Reveal(path); }
         catch (Exception ex) { Log.Error("reveal " + path, ex); }
     }
@@ -825,13 +1050,18 @@ public partial class MainWindow : Window
     void Disarm()
     {
         if (_armedKey is null) return;
-        foreach (var i in _items) if (i.Result.Key == _armedKey) i.SetSubtitleOverride(null);
+        foreach (var i in _items.Concat(_parts)) if (i.Result.Key == _armedKey) i.SetSubtitleOverride(null);
         _armedKey = null;
     }
 
     void UpdateFooter()
     {
-        if (_previewOpen) { FooterText.Text = "Space / Esc  닫기      ↑↓  다른 항목 미리보기"; return; }
+        if (_previewOpen)
+        {
+            FooterText.Text = _parts.Count > 0 ? "↑↓  항목 선택      ↵  실행      우클릭  더 보기      Space / Esc  닫기"
+                : IsGrid ? "Space / Esc  닫기" : "Space / Esc  닫기      ↑↓  다른 항목 미리보기";
+            return;
+        }
         if (Selected is not { } item) { FooterText.Text = ""; return; }
         var r = item.Result;
         if (IsGrid)
@@ -876,18 +1106,20 @@ public partial class MainWindow : Window
     bool _previewOpen;
     int _previewGeneration;
 
-    static bool CanPreview(SearchResult r) => r.RevealPath is not null && r.Kind is ResultKind.File or ResultKind.Folder or ResultKind.Path;
+    static bool CanPreview(SearchResult r) => ResultItem.CanPreview(r);
 
     /// <summary>Space went down on a previewable row: start the timer and stretch the row as if it were being pulled.</summary>
     void StartHold(ResultItem item)
     {
         _holding = true;
         _holdTimer.Start();
-        if (Results.ItemContainerGenerator.ContainerFromItem(item) is not ListBoxItem row) return;
+        var list = ActiveList;
+        if (list.ItemContainerGenerator.ContainerFromItem(item) is not ListBoxItem row) return;
         _pulledRow = row;
         var scale = new ScaleTransform();
         row.RenderTransformOrigin = new Point(0.5, 0.5);
         row.RenderTransform = scale;
+        if (list.Template.FindName("Glass", list) is Grid glass) glass.RenderTransform = scale; // same size and center as the row
         // The row swells the longer Space is held, as if about to pop open into the preview.
         var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
         AnimationTimeline Pull(double to)
@@ -919,15 +1151,19 @@ public partial class MainWindow : Window
 
     void OpenPreview()
     {
-        if (Selected is not { } item || item.Result.RevealPath is not { } path) return;
+        if (Selected is not { } item || !CanPreview(item.Result)) return;
+        var path = item.Result.RevealPath;
         bool wasOpen = _previewOpen;
         _previewOpen = true;
         int generation = ++_previewGeneration;
         PreviewTitle.Text = item.Title;
-        PreviewInfo.Text = path;
+        PreviewInfo.Text = path ?? "";
         PreviewImage.Source = null;
         PreviewText.Text = "";
-        Results.Visibility = Visibility.Collapsed;
+        PreviewText.TextWrapping = TextWrapping.NoWrap;
+        _parts.Clear();
+        PreviewParts.Visibility = Visibility.Collapsed;
+        ActiveList.Visibility = Visibility.Collapsed;
         PreviewPanel.Visibility = Visibility.Visible;
         UpdateFooter();
         if (!wasOpen)
@@ -938,7 +1174,49 @@ public partial class MainWindow : Window
             PreviewScale.BeginAnimation(ScaleTransform.ScaleYProperty, Anim(0.9, 1, 340, pop));
             PreviewPanel.BeginAnimation(OpacityProperty, Anim(0, 1, 180, new CubicEase { EasingMode = EasingMode.EaseOut }));
         }
-        _ = LoadPreviewAsync(path, generation);
+        if (item.Result.App is { } app) ShowAppDetails(app);
+        else if (item.IsClip) _ = ShowClipAsync(item, generation);
+        else _ = LoadPreviewAsync(path!, generation);
+    }
+
+    /// <summary>A clipboard entry in full: all of its text, wrapped, or its image at full size.</summary>
+    async Task ShowClipAsync(ResultItem item, int generation)
+    {
+        string when = item.Result.Subtitle.Replace("클립보드 · ", "");
+        if (_clipboard.Text(item.Result.Target) is { } text)
+        {
+            int lines = text.ReplaceLineEndings("\n").Split('\n').Length;
+            PreviewTitle.Text = "텍스트";
+            PreviewInfo.Text = $"{when} · {text.Length:N0}자 · {lines:N0}줄";
+            PreviewText.TextWrapping = TextWrapping.Wrap;
+            PreviewText.Text = text.Length > 200_000 ? text[..200_000] + "\n…" : text;
+            PreviewText.Visibility = Visibility.Visible;
+            return;
+        }
+        PreviewTitle.Text = "이미지";
+        PreviewInfo.Text = when;
+        PreviewText.Visibility = Visibility.Collapsed;
+        PreviewImage.Source = item.Icon; // the card's thumbnail until the full image is in
+        var image = await _clipboard.ImageAsync(item.Result.Target);
+        if (generation != _previewGeneration || image is null) return;
+        PreviewImage.Source = image;
+    }
+
+    /// <summary>The app's parts as rows, like apps themselves: what Enter on the app runs first, then its other shortcuts, program, tools, installer and uninstaller.</summary>
+    void ShowAppDetails(AppEntry app)
+    {
+        PreviewInfo.Text = string.Join(" · ", new[] { "애플리케이션", app.Publisher, app.Version is { } v ? "버전 " + v : app.Location }.OfType<string>());
+        PreviewText.Visibility = Visibility.Collapsed;
+        var launch = app.Launch;
+        int generation = _icons.NextGeneration();
+        foreach (var part in app.Parts.OrderBy(p => p != launch).ThenBy(p => p.Kind))
+        {
+            var row = new ResultItem(AppProvider.PartResult(app, part), "");
+            _parts.Add(row);
+            LoadIcon(row, generation);
+        }
+        PreviewParts.Visibility = Visibility.Visible;
+        SelectIn(PreviewParts, 0);
     }
 
     void ClosePreview()
@@ -949,7 +1227,10 @@ public partial class MainWindow : Window
         PreviewPanel.Visibility = Visibility.Collapsed;
         PreviewImage.Source = null;
         PreviewText.Text = "";
-        Results.Visibility = _items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        _parts.Clear();
+        PreviewParts.Visibility = Visibility.Collapsed;
+        if (IsGrid) AppGrid.Visibility = Visibility.Visible;
+        else Results.Visibility = _items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateFooter();
     }
 
@@ -1091,6 +1372,8 @@ public partial class MainWindow : Window
     {
         var state = _settings.FileSearch ? await Task.Run(() => EverythingClient.GetDbState(200)) : EverythingClient.DbState.NotRunning;
         _indexBusyPolls = state == EverythingClient.DbState.Busy ? _indexBusyPolls + 1 : 0;
+        _unresponsivePolls = state == EverythingClient.DbState.Unresponsive ? _unresponsivePolls + 1 : 0;
+        ShowEverythingStatus(state);
         string? detail = state switch
         {
             EverythingClient.DbState.Loading => "색인을 읽는 중",
@@ -1124,15 +1407,22 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Checks Everything off the UI thread: a busy Everything must not delay the first paint.</summary>
-    async Task UpdateStatusAsync()
+    const string EverythingDown = "Everything이 실행 중이 아님 · 파일 결과 제외";
+    const string EverythingStalled = "Everything 응답 없음 · 파일 결과 잠시 제외";
+
+    /// <summary>
+    /// Says so while file results are missing, from the once-a-second poll: at once when Everything is not running,
+    /// after about five seconds when it stops answering (it answers slowly while busy with a big index or a burst of
+    /// file changes), and gone again as soon as it answers. Only our own messages are touched.
+    /// </summary>
+    void ShowEverythingStatus(EverythingClient.DbState state)
     {
-        const string noEverything = "Everything 응답 없음 · 파일 결과 제외";
-        if (Status.Text == noEverything) Status.Text = "";
-        if (!_settings.FileSearch) return;
-        var version = await Task.Run(() => EverythingClient.GetVersion(300));
-        // Only touch our own message, so an error shown meanwhile (e.g. a failed launch) stays visible.
-        if (version is null && Status.Text.Length == 0) Status.Text = noEverything;
-        else if (version is not null && Status.Text == noEverything) Status.Text = "";
+        string? text = !_settings.FileSearch ? null
+            : state == EverythingClient.DbState.NotRunning ? EverythingDown
+            : _unresponsivePolls >= 5 ? EverythingStalled
+            : null;
+        bool ours = Status.Text is EverythingDown or EverythingStalled or "";
+        if (ours) Status.Text = text ?? "";
     }
 }
 

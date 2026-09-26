@@ -13,6 +13,16 @@ public static class ShellLauncher
         Process.Start(psi)?.Dispose();
     }
 
+    /// <summary>A command line as the registry writes them ("\"C:\\App\\unins000.exe\" /x", "MsiExec.exe /X{...}") split into program and arguments.</summary>
+    public static (string File, string Arguments) SplitCommandLine(string commandLine)
+    {
+        var s = commandLine.Trim();
+        if (s.StartsWith('"') && s.IndexOf('"', 1) is var end and > 0) return (s[1..end], s[(end + 1)..].Trim());
+        if (File.Exists(s)) return (s, ""); // an unquoted path with spaces
+        int exe = s.IndexOf(".exe ", StringComparison.OrdinalIgnoreCase);
+        return exe > 0 ? (s[..(exe + 4)], s[(exe + 5)..].Trim()) : (s, "");
+    }
+
     /// <summary>Extensions that "Run as administrator" makes sense for.</summary>
     static readonly HashSet<string> ElevatableExtensions = new(StringComparer.OrdinalIgnoreCase) { ".exe", ".lnk", ".bat", ".cmd", ".msc", ".msi" };
 

@@ -18,6 +18,23 @@ public static class AppCatalog
 
     public static bool IsCatalogQuery(string query) => Keywords.Contains(query.Trim());
 
+    /// <summary>
+    /// "app apple music", "app: apple music", "앱; 멜론", "app, code": a search among the apps only. Returns what follows
+    /// the keyword and its separator (space, colon, semicolon or comma), or null for any other query.
+    /// </summary>
+    public static string? ScopedQuery(string query)
+    {
+        var q = query.Trim();
+        foreach (var k in Keywords.OrderByDescending(k => k.Length))
+        {
+            if (q.Length <= k.Length || !q.StartsWith(k, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!(char.IsWhiteSpace(q[k.Length]) || q[k.Length] is ':' or ';' or ',')) continue; // "apple" is not "app le"
+            var rest = q[k.Length..].TrimStart(':', ';', ',', ' ', '\t').Trim();
+            if (rest.Length > 0) return rest;
+        }
+        return null;
+    }
+
     public sealed record Section(string Name, IReadOnlyList<AppEntry> Apps);
 
     public static IReadOnlyList<Section> Build(IEnumerable<AppEntry> apps)
@@ -32,11 +49,7 @@ public static class AppCatalog
             .ToList();
     }
 
-    static bool IsNoise(string name)
-    {
-        var lower = name.ToLowerInvariant();
-        return Providers.AppProvider.NoiseWords.Any(lower.Contains);
-    }
+    static bool IsNoise(string name) => ShellApps.RoleOf(name) is ShellApps.Role.Noise or ShellApps.Role.Uninstaller;
 
     /// <summary>"Chrome" → "C", "카카오톡" → "ㅋ", "까치" → "ㄱ" (double consonants share the plain one), "7-Zip" → "#".</summary>
     public static string SectionOf(string name)

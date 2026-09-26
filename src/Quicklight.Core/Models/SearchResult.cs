@@ -78,6 +78,9 @@ public sealed class SearchResult
     /// </summary>
     public bool IsSystemSummary { get; init; }
 
+    /// <summary>Apps: the whole app (shortcuts, executable, installer, uninstaller), for the preview and the context menu.</summary>
+    public Shell.AppEntry? App { get; init; }
+
     public DateTime? Modified { get; init; }
     public long? Size { get; init; }
 

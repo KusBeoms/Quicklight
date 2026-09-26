@@ -116,8 +116,8 @@ public sealed class McpServer(SearchEngine engine, EverythingClient? everything,
         };
         if (options.AllowOpen)
         {
-            tools.Add(Tool("open", "Open a document, folder, URL (http/https), Windows settings page (ms-settings:) or installed app (shell:AppsFolder\\... from search) with its default handler, as if the user double-clicked it. Executables, scripts, shortcuts and network paths are refused; use `reveal` to show those in Explorer instead.",
-                new JsonObject { ["target"] = Prop("string", "Absolute path, URL, ms-settings: URI or shell:AppsFolder\\<id>.") }, ["target"], readOnly: false));
+            tools.Add(Tool("open", "Open a document, folder, URL (http/https), Windows settings page (ms-settings:) or installed app (an app target from search) with its default handler, as if the user double-clicked it. Other executables, scripts, shortcuts and network paths are refused; use `reveal` to show those in Explorer instead.",
+                new JsonObject { ["target"] = Prop("string", "Absolute path, URL, ms-settings: URI or an app target from search.") }, ["target"], readOnly: false));
             tools.Add(Tool("reveal", "Show a file or folder selected in File Explorer.",
                 new JsonObject { ["path"] = Prop("string", "Absolute path of an existing file or folder.") }, ["path"], readOnly: false));
         }
@@ -301,21 +301,25 @@ public sealed class McpServer(SearchEngine engine, EverythingClient? everything,
     async Task<JsonObject> OpenAsync(JsonObject args)
     {
         var target = RequiredString(args, "target").Trim();
-        if (target.StartsWith(@"shell:AppsFolder\", StringComparison.OrdinalIgnoreCase))
+        bool isAppsFolder = target.StartsWith(@"shell:AppsFolder\", StringComparison.OrdinalIgnoreCase);
+        // A program only when an indexed app launches it (its package, shortcut or executable): an arbitrary AppsFolder
+        // path or executable can name any program.
+        bool indexedApp = (isAppsFolder || IsBlockedExecutable(target)) && await IsIndexedAppAsync(target);
+        if (!indexedApp)
         {
-            // Only apps from the index: an arbitrary AppsFolder path can name any program under a known folder.
-            await _warmUp;
-            if (!engine.Apps.IsKnownLaunchTarget(target)) throw new ToolException("Unknown app. Use a shell:AppsFolder target returned by `search`.");
-        }
-        else if (OpenableTarget(target) is not { } normalized)
-        {
-            throw new ToolException(IsBlockedExecutable(target)
+            if (isAppsFolder) throw new ToolException("Unknown app. Use an app target returned by `search`.");
+            target = OpenableTarget(target) ?? throw new ToolException(IsBlockedExecutable(target)
                 ? "Refusing to open executables, scripts or shortcuts from MCP. Use `reveal` to show it in Explorer and let the user decide."
                 : "Refusing to open: target must be an existing local absolute path, an http(s) URL or an ms-settings: URI.");
         }
-        else target = normalized;
         (options.Opener ?? (t => ShellLauncher.Open(t)))(target);
         return ToolResult(new JsonObject { ["opened"] = target }, $"열었습니다: `{target.Replace('`', '\'')}`");
+    }
+
+    async Task<bool> IsIndexedAppAsync(string target)
+    {
+        await _warmUp;
+        return engine.Apps.IsKnownLaunchTarget(target);
     }
 
     JsonObject Reveal(JsonObject args)

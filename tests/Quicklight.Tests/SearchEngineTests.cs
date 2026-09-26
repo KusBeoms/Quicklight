@@ -119,13 +119,85 @@ public class SearchEngineTests
         try
         {
             var store = new UsageStore(path);
-            store.Record("vs", "App:x");
+            store.Record("App:x", 2, 80);
             store.Flush();
             var reloaded = new UsageStore(path);
-            Assert.True(reloaded.Boost("v", "App:x") > 0);
-            Assert.Equal(0, reloaded.Boost("v", "App:y"));
+            Assert.True(reloaded.Boost("App:x", 1, () => 90) > reloaded.Boost("App:x", 1, () => 40)); // a weak match learns nothing
+            Assert.Equal(0, reloaded.Boost("App:y", 1, () => 90));
         }
         finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void History_keeps_results_not_queries()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ql-history-{Guid.NewGuid():N}.json");
+        try
+        {
+            // The old format stored the query itself; loading rewrites it without.
+            File.WriteAllText(path, """[{"Query":"secret plan","Key":"fs:c:\\x.txt","When":"2026-01-01T00:00:00"}]""");
+            var store = new UsageStore(path);
+            store.Flush();
+            var json = File.ReadAllText(path);
+            Assert.DoesNotContain("secret", json);
+            Assert.Contains("x.txt", json);
+
+            var engine = new SearchEngine(new QuicklightSettings(), store, new AppProvider(FakeApps));
+            engine.RecordSelection("kakao private words", new SearchResult { Title = "카카오톡", Kind = ResultKind.App, Target = "k" });
+            store.Flush();
+            Assert.DoesNotContain("private", File.ReadAllText(path));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Advanced_search_off_uses_builtin_values_and_keeps_its_own()
+    {
+        var s = new QuicklightSettings { MaxResults = 3, ExcludedPaths = [@"\secret\"], DemotedPaths = [], AdvancedSearch = false };
+        Assert.Equal(new QuicklightSettings().MaxResults, s.ResultLimit);
+        Assert.Empty(s.ExcludedPathsInEffect);
+        Assert.Equal(new QuicklightSettings().DemotedPaths, s.DemotedPathsInEffect);
+        Assert.Equal(3, s.MaxResults); // remembered
+        s.AdvancedSearch = true;
+        Assert.Equal(3, s.ResultLimit);
+        Assert.Equal([@"\secret\"], s.ExcludedPathsInEffect);
+    }
+
+    [Fact]
+    public void Recent_queries_keep_the_last_ten_newest_first()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ql-recent-{Guid.NewGuid():N}.json");
+        try
+        {
+            var recent = new RecentQueries(path);
+            for (int i = 1; i <= 12; i++) recent.Add($"q{i}");
+            recent.Add(" q5 "); // again: moves to the front, no duplicate
+            recent.Add("");
+            var reloaded = new RecentQueries(path);
+            Assert.Equal(["q5", "q12", "q11", "q10", "q9", "q8", "q7", "q6", "q4", "q3"], reloaded.Items);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public async Task Files_that_belong_to_a_listed_app_fold_into_it()
+    {
+        const string exe = @"C:\Program Files\Google\Chrome\Application\chrome.exe";
+        var files = new FixedProvider(
+            new SearchResult { Title = "chrome.exe", Kind = ResultKind.File, Target = exe, Score = 50 },
+            new SearchResult { Title = "chrome notes.txt", Kind = ResultKind.File, Target = @"C:\chrome notes.txt", Score = 50 });
+        var engine = new SearchEngine(new QuicklightSettings(), new UsageStore(null), new AppProvider(FakeApps), extraProviders: [files]);
+        var r = await engine.SearchAsync("chrome");
+        Assert.Single(r, x => x.Title == "Google Chrome");
+        Assert.DoesNotContain(r, x => x.Kind == ResultKind.File && x.Target == exe);
+        Assert.Contains(r, x => x.Title == "chrome notes.txt");
+    }
+
+    sealed class FixedProvider(params SearchResult[] results) : IResultProvider
+    {
+        public string Name => "fixed";
+        public Task<IReadOnlyList<SearchResult>> QueryAsync(QueryContext query, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<SearchResult>>(query.IsAlternate ? [] : results);
     }
 }
 

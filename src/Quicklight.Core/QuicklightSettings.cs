@@ -30,6 +30,20 @@ public sealed class QuicklightSettings
     /// <summary>User-defined commands: a name (and aliases) that runs a program with arguments.</summary>
     public List<CustomCommand> Commands { get; set; } = [];
 
+    /// <summary>
+    /// Use the result counts and path lists below. Off: the built-in values are used instead, and these stay as they
+    /// are for when it is switched on again.
+    /// </summary>
+    public bool AdvancedSearch { get; set; } = true;
+
+    static readonly QuicklightSettings Builtin = new();
+
+    [JsonIgnore] public int ResultLimit => AdvancedSearch ? MaxResults : Builtin.MaxResults;
+    [JsonIgnore] public int FileResultLimit => AdvancedSearch ? MaxFileResults : Builtin.MaxFileResults;
+    [JsonIgnore] public int FolderResultLimit => AdvancedSearch ? MaxFolderResults : Builtin.MaxFolderResults;
+    [JsonIgnore] public IReadOnlyList<string> DemotedPathsInEffect => AdvancedSearch ? DemotedPaths : Builtin.DemotedPaths;
+    [JsonIgnore] public IReadOnlyList<string> ExcludedPathsInEffect => AdvancedSearch ? ExcludedPaths : Builtin.ExcludedPaths;
+
     public int MaxResults { get; set; } = 12;
 
     /// <summary>Everything-backed file search.</summary>

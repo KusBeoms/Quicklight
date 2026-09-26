@@ -34,6 +34,19 @@ public sealed class ResultItem(SearchResult result, string group) : INotifyPrope
 
     public bool HasIcon => _icon is not null;
 
+    /// <summary>Holding Space opens a preview: files, folders, apps (their details) and clipboard entries. The row shows a ›.</summary>
+    public bool HasPreview => CanPreview(Result);
+
+    public static bool CanPreview(SearchResult r) =>
+        r.App is not null || r.RevealPath is not null && r.Kind is ResultKind.File or ResultKind.Folder or ResultKind.Path
+        || r.Kind == ResultKind.Clipboard && r.Action == ActionType.Paste;
+
+    /// <summary>A clipboard entry's text for its card (the first lines); null for an image, which shows <see cref="Icon"/>.</summary>
+    public string? Body { get; init; }
+
+    /// <summary>Drawn as a large card: text or image from the clipboard history.</summary>
+    public bool IsClip => Result.Kind == ResultKind.Clipboard && Result.Action == ActionType.Paste;
+
     /// <summary>Shown instead of the subtitle while a destructive command waits for its second Enter.</summary>
     public void SetSubtitleOverride(string? text)
     {

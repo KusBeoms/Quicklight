@@ -21,9 +21,9 @@ public static class Theme
 
         if (IsDark)
         {
-            Set(res, "PanelBrush", Color.FromArgb(0xB4, 0x1E, 0x1E, 0x22));
+            Set(res, "PanelBrush", Color.FromArgb(0x80, 0x1E, 0x1E, 0x22)); // over the blurred screen: it shows through
             Set(res, "MenuBrush", Color.FromArgb(0xFA, 0x2A, 0x2A, 0x30));
-            Set(res, "SolidPanelBrush", Color.FromArgb(0xF5, 0x26, 0x26, 0x2B));
+            Set(res, "SolidPanelBrush", Color.FromRgb(0x26, 0x26, 0x2B));
             Set(res, "TextBrush", Color.FromRgb(0xF2, 0xF2, 0xF4));
             Set(res, "SubtleTextBrush", Color.FromArgb(0xA8, 0xF2, 0xF2, 0xF4));
             Set(res, "PlaceholderBrush", Color.FromArgb(0x70, 0xF2, 0xF2, 0xF4));
@@ -35,9 +35,9 @@ public static class Theme
         }
         else
         {
-            Set(res, "PanelBrush", Color.FromArgb(0xB8, 0xF7, 0xF7, 0xF9));
+            Set(res, "PanelBrush", Color.FromArgb(0x90, 0xF7, 0xF7, 0xF9));
             Set(res, "MenuBrush", Color.FromArgb(0xFC, 0xFA, 0xFA, 0xFC));
-            Set(res, "SolidPanelBrush", Color.FromArgb(0xF8, 0xF7, 0xF7, 0xF9));
+            Set(res, "SolidPanelBrush", Color.FromRgb(0xF7, 0xF7, 0xF9));
             Set(res, "TextBrush", Color.FromRgb(0x1A, 0x1A, 0x1E));
             Set(res, "SubtleTextBrush", Color.FromArgb(0xA0, 0x1A, 0x1A, 0x1E));
             Set(res, "PlaceholderBrush", Color.FromArgb(0x70, 0x1A, 0x1A, 0x1E));
@@ -49,6 +49,9 @@ public static class Theme
         }
         Set(res, "AccentBrush", accent);
         Set(res, "SelectedTextBrush", Colors.White);
+
+        // The selection's tint over the magnified backdrop: lighter and clearer than the panel's own tint.
+        Set(res, "GlassFillBrush", IsDark ? Color.FromArgb(0x70, 0x3A, 0x3A, 0x42) : Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF));
     }
 
     static void Set(ResourceDictionary res, string key, Color c)

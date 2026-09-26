@@ -60,7 +60,7 @@ public partial class App : Application
         _hotkey = new HotkeyManager(_window.Handle, () => _window.Toggle());
         RegisterHotkey();
 
-        _tray = new TrayIcon(_settings, show: () => _window.ShowLauncher(), reload: ReloadSettings, exit: () => Shutdown(),
+        _tray = new TrayIcon(_settings, show: () => _window.ShowLauncher(), openSettings: OpenSettings, reload: ReloadSettings, exit: () => Shutdown(),
             installEverything: () => _ = SetUpEverythingAsync(userAsked: true));
         Autostart.Sync(_settings.LaunchAtStartup);
 
@@ -169,13 +169,21 @@ public partial class App : Application
         // Copy into the shared instance so the engine and providers see the change.
         foreach (var prop in typeof(QuicklightSettings).GetProperties().Where(p => p.CanWrite))
             prop.SetValue(_settings, prop.GetValue(fresh));
+        ApplySettings();
+        _tray?.Notify("Quicklight", "설정을 다시 불러왔습니다.");
+    }
+
+    /// <summary>Puts the current settings into effect (the engine and providers read the shared instance themselves).</summary>
+    void ApplySettings()
+    {
         Theme.Apply(Resources, _settings.Theme);
         _window?.ApplyBackdrop();
         _hotkey?.Unregister();
         RegisterHotkey();
         Autostart.Sync(_settings.LaunchAtStartup);
-        _tray?.Notify("Quicklight", "설정을 다시 불러왔습니다.");
     }
+
+    public void OpenSettings() => SettingsWindow.Open(_settings, ApplySettings);
 
     protected override void OnExit(ExitEventArgs e)
     {

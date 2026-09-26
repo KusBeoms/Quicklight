@@ -10,4 +10,7 @@
     <EmbeddedResource Include="..\..\third_party\everything\Everything.exe" LogicalName="Quicklight.Everything.exe" />
     <EmbeddedResource Include="..\..\third_party\everything\License.txt" LogicalName="Quicklight.Everything.License.txt" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
 </Project>

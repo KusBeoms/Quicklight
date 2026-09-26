@@ -101,8 +101,8 @@ public class EverythingTests
     [Fact]
     public async Task Live_app_index_is_not_empty()
     {
-        var apps = await ShellApps.EnumerateAsync();
+        var apps = await ShellApps.ScanAsync();
         Assert.True(apps.Count > 10, $"only {apps.Count} apps");
-        Assert.Contains(apps, a => a.FilePath is null); // packaged apps have no file path
+        Assert.Contains(apps, a => a.Part(AppPartKind.Package) is not null); // Store apps
     }
 }
