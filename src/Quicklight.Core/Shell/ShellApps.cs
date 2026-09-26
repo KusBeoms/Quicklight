@@ -28,6 +28,10 @@ public sealed class AppEntry
 
     public string Name { get; }
     public IReadOnlyList<AppPart> Parts => _parts;
+
+    /// <summary>Other names it is found by: the English file name behind a localized one ("File Explorer" for 파일 탐색기).</summary>
+    public IReadOnlyList<string> Aliases => _aliases;
+    readonly List<string> _aliases = [];
     public string? Publisher { get; set; }
     public string? Version { get; set; }
     public string? Location { get; set; }
@@ -46,6 +50,11 @@ public sealed class AppEntry
     internal void Add(AppPart part)
     {
         if (!_parts.Exists(p => p.Kind == part.Kind && string.Equals(p.Target, part.Target, StringComparison.OrdinalIgnoreCase))) _parts.Add(part);
+    }
+
+    internal void AddAlias(string alias)
+    {
+        if (!string.Equals(alias, Name, StringComparison.OrdinalIgnoreCase) && !_aliases.Contains(alias, StringComparer.OrdinalIgnoreCase)) _aliases.Add(alias);
     }
 
     public AppPart? Part(AppPartKind kind) => _parts.Find(p => p.Kind == kind);
@@ -67,7 +76,8 @@ public sealed class AppEntry
     /// <summary>The executable (else the shortcut) on disk, for Explorer and properties. Null for packages.</summary>
     public string? FilePath => ExePath ?? Part(AppPartKind.Shortcut)?.Target;
 
-    public string IconSource => Part(AppPartKind.Package)?.LaunchTarget ?? FilePath ?? Launch.Target;
+    /// <summary>The icon of what Enter runs: a shortcut often carries the app's own icon while its program is a generic launcher (FusionLauncher.exe).</summary>
+    public string IconSource => Launch.LaunchTarget;
 }
 
 /// <summary>
@@ -125,7 +135,9 @@ public static class ShellApps
     /// <summary>Same app name: "Google Chrome" and "google-chrome". Versions count ("Python 3.11" ≠ "Python 3.12").</summary>
     static string Norm(string name) => Regex.Replace(name.ToLowerInvariant(), @"[^\p{L}\p{N}]", "");
 
-    internal sealed record Shortcut(string Path, string Name, string? Target, string? Arguments, bool OnDesktop);
+    /// <param name="Name">What the Start menu shows, localized ("파일 탐색기").</param>
+    /// <param name="FileName">The shortcut's file name when it differs from <paramref name="Name"/> ("File Explorer").</param>
+    internal sealed record Shortcut(string Path, string Name, string? Target, string? Arguments, bool OnDesktop, string? FileName = null);
     /// <param name="Runnable">
     /// <paramref name="Icon"/> is the program itself, on disk: not an uninstaller, installer or a file in the installer
     /// caches or Windows. Such an entry is an app even without a shortcut (Chrome after its shortcut was deleted).
@@ -165,7 +177,7 @@ public static class ShellApps
         var extras = new List<(Shortcut Link, Role Role)>();
         foreach (var s in shortcuts.OrderBy(s => s.OnDesktop)) // Start menu names win over desktop ones
         {
-            var role = RoleOf(s.Name);
+            var role = s.FileName is { } file && RoleOf(file) != Role.App ? RoleOf(file) : RoleOf(s.Name);
             if (role == Role.Noise) continue;
             if (role != Role.App) { extras.Add((s, role)); continue; }
             bool exe = IsExe(s.Target);
@@ -174,6 +186,7 @@ public static class ShellApps
             if (targetKey is null || !byTarget.TryGetValue(targetKey, out var app)) app = Named(s.Name);
             if (targetKey is not null) byTarget.TryAdd(targetKey, app);
             app.Add(new AppPart(AppPartKind.Shortcut, s.Path));
+            if (s.FileName is { } english) app.AddAlias(english);
             if (exe) app.Add(new AppPart(AppPartKind.Exe, s.Target!, string.IsNullOrEmpty(s.Arguments) ? null : s.Arguments));
         }
         foreach (var p in packages)
@@ -278,7 +291,9 @@ public static class ShellApps
             foreach (var lnk in Directory.EnumerateFiles(dir, "*.lnk", options))
             {
                 var (target, args) = Native.Shell.ReadShortcut(lnk);
-                list.Add(new Shortcut(lnk, Path.GetFileNameWithoutExtension(lnk), target, args, desktop));
+                var file = Path.GetFileNameWithoutExtension(lnk);
+                var shown = Native.Shell.DisplayName(lnk) is { } d && d != file && !d.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase) ? d : null;
+                list.Add(new Shortcut(lnk, shown ?? file, target, args, desktop, shown is null ? null : file));
             }
         }
         Read(Environment.SpecialFolder.CommonPrograms, false);

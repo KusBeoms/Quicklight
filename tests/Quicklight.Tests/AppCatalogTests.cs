@@ -69,6 +69,18 @@ public class AppCatalogTests
     }
 
     [Fact]
+    public async Task Localized_shortcut_names_keep_the_english_one_as_an_alias()
+    {
+        var apps = ShellApps.Group([new ShellApps.Shortcut(@"C:\Menu\File Explorer.lnk", "파일 탐색기", @"C:\Windows\explorer.exe", null, false, "File Explorer")], [], [], []);
+        var app = Assert.Single(apps);
+        Assert.Equal("파일 탐색기", app.Name);
+        Assert.Equal(["File Explorer"], app.Aliases);
+        var provider = new AppProvider(apps);
+        foreach (var q in new[] { "파일탐색기", "file explore", "탐색기" })
+            Assert.Equal("파일 탐색기", Assert.Single(await provider.QueryAsync(new QueryContext(q), default)).Title);
+    }
+
+    [Fact]
     public void Updater_and_other_tools_join_the_app_in_their_folder()
     {
         const string dir = @"C:\NoSuch\Electronic Arts\EA Desktop"; // not on disk: Enter's choice is then the first by priority
@@ -138,6 +150,7 @@ public class AppCatalogTests
             Assert.Equal(new AppPart(AppPartKind.Exe, exe, "--flag"), app.Launch);
             File.WriteAllText(lnk, "");
             Assert.Equal(AppPartKind.Shortcut, app.Launch.Kind);
+            Assert.Equal(lnk, app.IconSource); // the icon follows what Enter runs, not the (often generic) program
         }
         finally { Directory.Delete(dir, true); }
     }
@@ -149,12 +162,14 @@ public class AppCatalogTests
         try
         {
             var app = new AppEntry("Zoom", [new AppPart(AppPartKind.Shortcut, @"C:\a.lnk"), new AppPart(AppPartKind.Exe, @"C:\z.exe", "-x")]) { Publisher = "Zoom" };
+            app.AddAlias("Zoom Workplace");
             AppDatabase.Save(path, [app, new AppEntry("메모장", "Notepad!App")]);
             AppDatabase.Save(path, [app]); // a rescan replaces the list
             var loaded = Assert.Single(AppDatabase.Load(path));
             Assert.Equal("Zoom", loaded.Name);
             Assert.Equal("Zoom", loaded.Publisher);
             Assert.Equal(app.Parts, loaded.Parts);
+            Assert.Equal(["Zoom Workplace"], loaded.Aliases);
         }
         finally { File.Delete(path); }
     }

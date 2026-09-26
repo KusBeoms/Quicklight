@@ -60,6 +60,27 @@ internal static class Shell
         finally { if (link is not null) Marshal.ReleaseComObject(link); }
     }
 
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct SHFILEINFO
+    {
+        public IntPtr hIcon;
+        public int iIcon;
+        public uint dwAttributes;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szDisplayName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)] public string szTypeName;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    static extern IntPtr SHGetFileInfo(string path, uint attributes, ref SHFILEINFO info, uint size, uint flags);
+
+    /// <summary>The name Explorer and the Start menu show, which Windows localizes: "File Explorer.lnk" → "파일 탐색기".</summary>
+    public static string? DisplayName(string path)
+    {
+        var info = new SHFILEINFO();
+        return SHGetFileInfo(path, 0, ref info, (uint)Marshal.SizeOf<SHFILEINFO>(), 0x200 /* SHGFI_DISPLAYNAME */) != IntPtr.Zero
+               && !string.IsNullOrWhiteSpace(info.szDisplayName) ? info.szDisplayName : null;
+    }
+
     static readonly Guid FOLDERID_Downloads = new("374DE290-123F-4565-9164-39C4925E467B");
 
     [DllImport("shell32.dll")]

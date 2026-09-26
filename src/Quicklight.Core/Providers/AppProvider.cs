@@ -146,6 +146,7 @@ public sealed class AppProvider : IResultProvider
         foreach (var app in _apps)
         {
             double m = FuzzyMatcher.Score(q, app.Name);
+            foreach (var alias in app.Aliases) m = Math.Max(m, FuzzyMatcher.Score(q, alias) - 2); // "file explorer" → 파일 탐색기
             // Desktop apps are also findable by their exe name: "code" -> Visual Studio Code (Code.exe).
             // Not when the shortcut passes arguments: then the program is someone else's (a Chrome web app runs chrome_proxy).
             if (app.Part(AppPartKind.Exe) is { Arguments: null, Target: var fp }) m = Math.Max(m, FuzzyMatcher.Score(q, Path.GetFileNameWithoutExtension(fp)) - 6);

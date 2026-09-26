@@ -51,6 +51,15 @@ public class CurrencyTests
     [InlineData("1억 2천3백만원", 123000000, "KRW", null)]
     [InlineData("3십만원", 300000, "KRW", null)]
     [InlineData("100달러 환전 얼마", 100, "USD", null)]
+    // Numbers written as words.
+    [InlineData("오백달러", 500, "USD", null)]
+    [InlineData("오백 달러를 원으로", 500, "USD", "KRW")]
+    [InlineData("천오백엔", 1500, "JPY", null)]
+    [InlineData("이십오만원 달러", 250000, "KRW", "USD")]
+    [InlineData("삼천만원", 30000000, "KRW", null)]
+    [InlineData("백달러는 몇 원이야", 100, "USD", "KRW")] // "이" of 이야 stays a word
+    [InlineData("일억 오천만원", 150000000, "KRW", null)]
+    [InlineData("2십5달러", 25, "USD", null)]
     public void Parses(string text, double amount, string from, string? to)
     {
         var q = P(text);
@@ -79,6 +88,9 @@ public class CurrencyTests
     [InlineData("2 mad")]
     [InlineData("5 all")]
     [InlineData("5만만원")]            // repeated group unit is not a number
+    [InlineData("백엔드")]              // a word that starts like 백 엔
+    [InlineData("오달러")]              // a number word without a unit stays a word
+    [InlineData("이달러")]
     [InlineData("5천천원")]
     [InlineData("5 pen")]
     [InlineData("100달러 all")]

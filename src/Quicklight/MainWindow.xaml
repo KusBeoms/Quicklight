@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Quicklight"
-        Title="Quicklight" Width="888" Height="700"
+        Title="Quicklight" Width="988" Height="700"
         WindowStyle="None" AllowsTransparency="False" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
         Background="Transparent" FontFamily="{StaticResource UiFont}"
         UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
@@ -338,7 +338,11 @@
                              Foreground="{DynamicResource TextBrush}" CaretBrush="Transparent"
                              SelectionBrush="{DynamicResource AccentBrush}" VerticalAlignment="Center"
                              TextChanged="Query_TextChanged" PreviewKeyDown="Query_PreviewKeyDown" PreviewKeyUp="Query_PreviewKeyUp"
+                             PreviewTextInput="Query_PreviewTextInput"
                              InputMethod.PreferredImeState="DoNotCare" />
+                    <!-- On the all-apps screen, what was typed to jump to an app ("clau" → Claude). -->
+                    <TextBlock Grid.Column="1" x:Name="TypeAhead" FontSize="22" HorizontalAlignment="Right" VerticalAlignment="Center"
+                               Margin="0,0,4,0" Foreground="{DynamicResource AccentBrush}" IsHitTestVisible="False" Visibility="Collapsed" />
                     <Canvas Grid.Column="1" x:Name="CaretLayer" IsHitTestVisible="False">
                         <Rectangle x:Name="Caret" Width="2" RadiusX="1" RadiusY="1" Fill="{DynamicResource TextBrush}" Visibility="Collapsed">
                             <Rectangle.RenderTransform>
@@ -419,7 +423,8 @@
                          PreviewMouseLeftButtonDown="List_PreviewMouseLeftButtonDown" PreviewMouseRightButtonUp="List_PreviewMouseRightButtonUp">
                     <ListBox.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <WrapPanel Width="800" HorizontalAlignment="Center" />
+                            <!-- Nine 100-DIP tiles a row; AppCardWidth leaves 20 DIPs each side. -->
+                            <WrapPanel Width="900" HorizontalAlignment="Center" />
                         </ItemsPanelTemplate>
                     </ListBox.ItemsPanel>
                     <ListBox.GroupStyle>

@@ -19,7 +19,7 @@ public static class CurrencyParser
 
     // A bare 3-letter code only counts after the number ("100 php"), never before it: "php 8", "top 10", "all 3" are searches.
     // "5", "5백만", "1억 2천만", "1.2억": numbers with Korean units, possibly several groups.
-    static readonly string Amount = $@"(?:{Number})(?:\s*[십백천만억])*(?:\s*(?:{Number})(?:\s*[십백천만억])+)*";
+    static readonly string Amount = $@"(?:{Number})(?:\s*[십백천만억])*(?:\s*(?:{Number})(?:\s*[십백천만억])+)*(?:\s*(?:{Number}))?";
 
     static readonly Regex Pattern = new(
         $@"^\s*(?:(?<src>{Names})\s*(?<amt>{Amount})|(?<amt>{Amount})\s*(?<src>{AliasPattern}))" +
@@ -82,12 +82,27 @@ public static class CurrencyParser
 
     static readonly Regex WhitespaceRun = new(@"\s+", RegexOptions.Compiled);
 
+    // A run of Korean number syllables: "오백", "천오백", "삼만", "이십오". Digits only count inside a run that has a unit,
+    // so "이" in "이야" or "일" in "일본" stay words.
+    static readonly Regex KoreanNumeral = new("[일이삼사오육칠팔구십백천만억]+", RegexOptions.Compiled);
+
+    /// <summary>"오백달러" → "5백달러", "천오백 엔" → "1천5백 엔", "이십오만원" → "2십5만원": number words to what <see cref="Amount"/> reads.</summary>
+    internal static string DigitsForWords(string text) => KoreanNumeral.Replace(text, m =>
+    {
+        var run = m.Value;
+        if (run.IndexOfAny(['십', '백', '천', '만', '억']) < 0) return run;
+        var digits = string.Concat(run.Select(c => "일이삼사오육칠팔구".IndexOf(c) is var i and >= 0 ? (char)('1' + i) : c));
+        // A unit first ("천오백") means one of it; after a digit ("5백" typed as 5 + 백) it continues that number.
+        bool afterDigit = m.Index > 0 && (char.IsDigit(text[m.Index - 1]) || text[m.Index - 1] == '.');
+        return !afterDigit && !char.IsDigit(digits[0]) ? "1" + digits : digits;
+    });
+
     /// <param name="isKnown">Whether the rate table has an ISO code (unknown 3-letter words are not currencies).</param>
     public static CurrencyQuery? Parse(string text, Func<string, bool> isKnown)
     {
         if (string.IsNullOrWhiteSpace(text) || text.Length > 80) return null;
         // Collapse whitespace first: runs of spaces between the optional parts are what makes backtracking slow.
-        text = WhitespaceRun.Replace(text.Trim(), " ");
+        text = DigitsForWords(WhitespaceRun.Replace(text.Trim(), " "));
         Match m;
         try { m = Pattern.Match(text); }
         catch (RegexMatchTimeoutException) { return null; }

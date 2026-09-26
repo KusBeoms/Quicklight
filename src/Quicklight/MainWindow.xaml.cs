@@ -11,6 +11,7 @@ using System.Windows.Media.Imaging;
 using Quicklight.Core;
 using Quicklight.Core.Activity;
 using Quicklight.Core.Everything;
+using Quicklight.Core.Matching;
 using Quicklight.Core.Models;
 using Quicklight.Core.Providers;
 using Quicklight.Core.Shell;
@@ -26,7 +27,8 @@ public partial class MainWindow : Window
     const double CardRadius = 31;        // corners of the results card: the same as the search pill
     const double CardOffset = 72;        // DIPs from the top of the pill to the top of the card (62 pill + 10 gap)
     const double PillWidth = 720;        // the search pill, and the card except on the app screen
-    const double GridCardWidth = 840;    // the card on the app screen: room for one more column (the window leaves space for it)
+    const double AppCardWidth = 940;     // the card on the app screen: nine tile columns (the window leaves space for it)
+    const double ClipCardWidth = 840;    // the card on the clipboard screen
     const double BackdropPad = 48;       // DIPs captured beyond the panel so the blur near its edges has real content
     const double BackdropBlur = 14;      // blur strength (Gaussian sigma) of the backdrop, in DIPs
 
@@ -35,7 +37,7 @@ public partial class MainWindow : Window
     readonly UpdateService _updates;
     readonly ClipboardHistoryProvider _clipboard;
     IntPtr _previousForeground; // where Paste results go
-    readonly IconLoader _icons = new(64);
+    readonly IconLoader _icons = new(96); // tiles are 44 DIPs: sharp up to 200% display scaling
     readonly ObservableCollection<ResultItem> _items = [];
     ObservableCollection<ResultItem> _apps = [];
     readonly RecentQueries _recent = new(RecentQueries.DefaultPath);
@@ -97,6 +99,7 @@ public partial class MainWindow : Window
             e.Handled = true;
             Execute(item);
         };
+        _typeAheadTimer.Tick += (_, _) => ClearTypeAhead();
         _holdTimer.Tick += (_, _) =>
         {
             _holdTimer.Stop();
@@ -106,6 +109,12 @@ public partial class MainWindow : Window
     }
 
     bool _gridShown; // the all-apps grid, also while a preview covers it
+
+    // On the all-apps screen typing no longer edits the query: up to ten letters jump to an app instead, until typing pauses.
+    bool _gridLocked;
+    readonly System.Text.StringBuilder _typeAhead = new();
+    readonly System.Windows.Threading.DispatcherTimer _typeAheadTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    const int TypeAheadMax = 10;
     bool IsGrid => _gridShown;
     ListBox ActiveList => IsGrid ? AppGrid : Results;
     ResultItem? Selected => ActiveList.SelectedItem as ResultItem;
@@ -317,7 +326,7 @@ public partial class MainWindow : Window
     /// <summary>On the app screen the card widens (and, through the taller grid, grows) to show more apps.</summary>
     void SyncCardWidth()
     {
-        double w = AppGrid.Visibility == Visibility.Visible || _clipMode ? GridCardWidth : PillWidth;
+        double w = AppGrid.Visibility == Visibility.Visible ? AppCardWidth : _clipMode ? ClipCardWidth : PillWidth;
         if (!IsVisible) { ListSurface.BeginAnimation(WidthProperty, null); ListSurface.Width = w; return; }
         ListSurface.BeginAnimation(WidthProperty, Anim(null, w, 260, new CubicEase { EasingMode = EasingMode.EaseOut }));
     }
@@ -359,6 +368,7 @@ public partial class MainWindow : Window
     void Query_TextChanged(object sender, TextChangedEventArgs e)
     {
         Placeholder.Visibility = Query.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        LockToGrid(AppCatalog.IsCatalogQuery(Query.Text));
         Disarm();
         ClosePreview();
         if (AppCatalog.IsCatalogQuery(Query.Text))
@@ -464,6 +474,12 @@ public partial class MainWindow : Window
         if (!any) return;
         int index = selectedKey is null ? 0 : Math.Max(0, ordered.FindIndex(i => i.Result.Key == selectedKey));
         Select(index, disarm: false);
+        // The rows were only just added, so that scroll ran before they were laid out: once they are, bring the
+        // selection into view (the list may be taller than the card, and a kept selection may be far down).
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
+        {
+            if (Results.IsVisible && Results.SelectedIndex >= 0) SelectIn(Results, Results.SelectedIndex, disarm: false);
+        });
     }
 
     ResultItem NewItem(SearchResult r, string group) => new(r, group)
@@ -521,6 +537,76 @@ public partial class MainWindow : Window
         AppGrid.SelectedIndex = 0;
         AppGrid.ScrollIntoView(AppGrid.SelectedItem);
         UpdateFooter();
+        if (_typeAhead.Length > 0) TypeAheadChanged(); // letters typed before the grid was up
+    }
+
+    /// <summary>
+    /// The all-apps screen takes the keyboard: the query is read-only (Backspace gives it back) and letters go to the
+    /// jump buffer. The IME is off meanwhile, so keys arrive as Latin letters; Korean names are matched through the
+    /// keyboard-layout conversion ("zkzk" → 카카).
+    /// </summary>
+    void LockToGrid(bool on)
+    {
+        if (_gridLocked == on) return;
+        _gridLocked = on;
+        Query.IsReadOnly = on;
+        InputMethod.SetIsInputMethodEnabled(Query, !on);
+        if (!on) ClearTypeAhead();
+    }
+
+    void Query_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        if (!_gridLocked) return;
+        e.Handled = true;
+        foreach (var c in e.Text)
+            if (!char.IsControl(c) && !char.IsWhiteSpace(c) && _typeAhead.Length < TypeAheadMax) _typeAhead.Append(c);
+        TypeAheadChanged();
+    }
+
+    void ClearTypeAhead()
+    {
+        _typeAheadTimer.Stop();
+        _typeAhead.Clear();
+        TypeAhead.Text = "";
+        TypeAhead.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>Shows the buffer at the right of the search box and selects the app it most likely means.</summary>
+    void TypeAheadChanged()
+    {
+        _typeAheadTimer.Stop();
+        if (_typeAhead.Length == 0) { ClearTypeAhead(); return; }
+        TypeAhead.Text = _typeAhead.ToString();
+        TypeAhead.Visibility = Visibility.Visible;
+        _typeAheadTimer.Start();
+        if (IsGrid && BestTile(_typeAhead.ToString()) is var i and >= 0) SelectIn(AppGrid, i);
+    }
+
+    /// <summary>
+    /// One letter: the first app of its section ("c" → C, or the ㅊ section when there is no C). More: the best match
+    /// by name, also read as Korean keys ("zkzkdh" → 카카오), the earlier app on a tie.
+    /// </summary>
+    int BestTile(string typed)
+    {
+        var hangul = Hangul.QwertyToHangul(typed);
+        if (typed.Length == 1)
+        {
+            foreach (var section in new[] { AppCatalog.SectionOf(typed), hangul is null ? null : AppCatalog.SectionOf(hangul) })
+                if (section is not null)
+                    for (int i = 0; i < _apps.Count; i++)
+                        if (_apps[i].Group == section) return i;
+            return -1;
+        }
+        double best = 0;
+        int at = -1;
+        for (int i = 0; i < _apps.Count; i++)
+        {
+            var r = _apps[i].Result;
+            double m = Math.Max(FuzzyMatcher.Score(typed, r.Title), hangul is null ? 0 : FuzzyMatcher.Score(hangul, r.Title));
+            foreach (var alias in r.App?.Aliases ?? []) m = Math.Max(m, FuzzyMatcher.Score(typed, alias));
+            if (m > best) (best, at) = (m, i);
+        }
+        return best >= 50 ? at : -1;
     }
 
     /// <summary>Up/Down in the grid: the nearest tile in the next row above or below, across section breaks.</summary>
@@ -585,6 +671,11 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
+        if (_gridLocked && e.Key == Key.Back)
+        {
+            if (_typeAhead.Length > 0) { _typeAhead.Length--; TypeAheadChanged(); e.Handled = true; return; }
+            LockToGrid(false); // an empty buffer: Backspace edits the query again, which leaves the grid
+        }
         // Like a terminal: ↑ in an empty box brings back the last query, again for older ones; ↓ goes back toward empty.
         if (e.Key is Key.Up or Key.Down && mods == ModifierKeys.None && BrowsingRecent && (e.Key == Key.Up || Query.Text.Length > 0))
         {
@@ -600,8 +691,8 @@ public partial class MainWindow : Window
             case Key.Left when IsGrid: SelectIn(AppGrid, AppGrid.SelectedIndex - 1); e.Handled = true; break;
             case Key.Down: Select(Results.SelectedIndex + 1); e.Handled = true; break;
             case Key.Up: Select(Results.SelectedIndex - 1); e.Handled = true; break;
-            case Key.PageDown: SelectIn(ActiveList, ActiveList.SelectedIndex + (IsGrid ? 24 : 5)); e.Handled = true; break;
-            case Key.PageUp: SelectIn(ActiveList, ActiveList.SelectedIndex - (IsGrid ? 24 : 5)); e.Handled = true; break;
+            case Key.PageDown: SelectIn(ActiveList, ActiveList.SelectedIndex + (IsGrid ? 27 : 5)); e.Handled = true; break; // three rows of nine
+            case Key.PageUp: SelectIn(ActiveList, ActiveList.SelectedIndex - (IsGrid ? 27 : 5)); e.Handled = true; break;
             case Key.Enter when mods == (ModifierKeys.Control | ModifierKeys.Shift):
                 if (Selected is { } toElevate && ShellLauncher.CanRunAsAdmin(toElevate.Result.RevealPath ?? toElevate.Result.Target))
                     RunAsAdmin(toElevate, toElevate.Result.RevealPath ?? toElevate.Result.Target);
@@ -621,6 +712,7 @@ public partial class MainWindow : Window
             case Key.Escape:
                 if (_updateBusy && _updateCts is { IsCancellationRequested: false } updating) updating.Cancel(); // "Esc로 취소"
                 else if (_armedKey is not null) Disarm();
+                else if (_typeAhead.Length > 0) ClearTypeAhead();
                 else if (Query.Text.Length > 0) Query.Clear();
                 else HideLauncher();
                 e.Handled = true; break;
@@ -666,7 +758,7 @@ public partial class MainWindow : Window
     {
         bool tapped = _holdTimer.IsEnabled;
         CancelHold();
-        if (!tapped) return; // the preview opened
+        if (!tapped || _gridLocked) return; // the preview opened, or the grid has the keyboard
         int start = Query.SelectionStart;
         Query.SelectedText = " ";
         Query.Select(start + 1, 0);

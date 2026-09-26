@@ -8,7 +8,7 @@ namespace Quicklight.Core.Shell;
 /// </summary>
 public static class AppDatabase
 {
-    const int SchemaVersion = 1;
+    const int SchemaVersion = 2; // 2: aliases
 
     public static string DefaultPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Quicklight", "apps.db");
@@ -26,7 +26,7 @@ public static class AppDatabase
             cmd.CommandText = $"""
                 DROP TABLE IF EXISTS part;
                 DROP TABLE IF EXISTS app;
-                CREATE TABLE app (id INTEGER PRIMARY KEY, name TEXT NOT NULL, publisher TEXT, version TEXT, location TEXT);
+                CREATE TABLE app (id INTEGER PRIMARY KEY, name TEXT NOT NULL, publisher TEXT, version TEXT, location TEXT, aliases TEXT);
                 CREATE TABLE part (app INTEGER NOT NULL REFERENCES app(id), kind TEXT NOT NULL, target TEXT NOT NULL, args TEXT);
                 PRAGMA user_version = {SchemaVersion};
                 """;
@@ -42,15 +42,19 @@ public static class AppDatabase
         var apps = new Dictionary<long, AppEntry>();
         using (var cmd = c.CreateCommand())
         {
-            cmd.CommandText = "SELECT id, name, publisher, version, location FROM app ORDER BY id";
+            cmd.CommandText = "SELECT id, name, publisher, version, location, aliases FROM app ORDER BY id";
             using var r = cmd.ExecuteReader();
             while (r.Read())
-                apps[r.GetInt64(0)] = new AppEntry(r.GetString(1))
+            {
+                var app = apps[r.GetInt64(0)] = new AppEntry(r.GetString(1))
                 {
                     Publisher = r.IsDBNull(2) ? null : r.GetString(2),
                     Version = r.IsDBNull(3) ? null : r.GetString(3),
                     Location = r.IsDBNull(4) ? null : r.GetString(4),
                 };
+                if (!r.IsDBNull(5))
+                    foreach (var alias in r.GetString(5).Split('\n', StringSplitOptions.RemoveEmptyEntries)) app.AddAlias(alias);
+            }
         }
         using (var cmd = c.CreateCommand())
         {
@@ -72,7 +76,8 @@ public static class AppDatabase
 
         using var insertApp = c.CreateCommand();
         insertApp.Transaction = tx;
-        insertApp.CommandText = "INSERT INTO app (id, name, publisher, version, location) VALUES ($id, $name, $publisher, $version, $location)";
+        insertApp.CommandText = "INSERT INTO app (id, name, publisher, version, location, aliases) VALUES ($id, $name, $publisher, $version, $location, $aliases)";
+        var aliases = insertApp.Parameters.Add("$aliases", SqliteType.Text);
         var (id, name, publisher, version, location) = (insertApp.Parameters.Add("$id", SqliteType.Integer), insertApp.Parameters.Add("$name", SqliteType.Text),
             insertApp.Parameters.Add("$publisher", SqliteType.Text), insertApp.Parameters.Add("$version", SqliteType.Text), insertApp.Parameters.Add("$location", SqliteType.Text));
         using var insertPart = c.CreateCommand();
@@ -89,6 +94,7 @@ public static class AppDatabase
             publisher.Value = (object?)a.Publisher ?? DBNull.Value;
             version.Value = (object?)a.Version ?? DBNull.Value;
             location.Value = (object?)a.Location ?? DBNull.Value;
+            aliases.Value = a.Aliases.Count > 0 ? string.Join('\n', a.Aliases) : DBNull.Value;
             insertApp.ExecuteNonQuery();
             foreach (var p in a.Parts)
             {

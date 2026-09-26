@@ -90,3 +90,58 @@ public class FuzzyMatcherTests
     public void Shorter_names_win_for_the_same_prefix() =>
         Assert.True(FuzzyMatcher.Score("note", "Notepad") > FuzzyMatcher.Score("note", "Notepad++ Plugin Admin Tool"));
 }
+
+public class PhoneticTests
+{
+    [Theory]
+    [InlineData("애플뮤직", "Apple Music")]
+    [InlineData("애플 뮤직", "Apple Music")]
+    [InlineData("비주얼 스튜디오 코드", "Visual Studio Code")]
+    [InlineData("디스코드", "Discord")]
+    [InlineData("노션", "Notion")]
+    [InlineData("유튜브", "YouTube")]
+    [InlineData("깃허브", "GitHub")]
+    [InlineData("넷플릭스", "Netflix")]
+    [InlineData("팟플레이어", "PotPlayer")]
+    [InlineData("melon", "멜론")]
+    [InlineData("kakaotalk", "카카오톡")]
+    public void Same_sounds_in_the_other_script(string query, string name) => Assert.Equal(74, FuzzyMatcher.Score(query, name));
+
+    [Theory]
+    [InlineData("뮤직", "Apple Music")] // a later word
+    [InlineData("크롬", "Google Chrome")]
+    [InlineData("애플", "Apple Music")] // the start
+    public void Partial_sounds_match_lower(string query, string name) =>
+        Assert.InRange(FuzzyMatcher.Score(query, name), 50, 70);
+
+    [Theory]
+    [InlineData("크롬", "Calculator")]
+    [InlineData("애플", "Paint")]
+    [InlineData("유튜브", "3D 뷰어")] // only the name's Latin letters are compared with a Korean query
+    [InlineData("메모장", "Notepad")] // a translation, not a sound: found by the localized name instead
+    public void Different_sounds_do_not_match(string query, string name) => Assert.Equal(0, FuzzyMatcher.Score(query, name));
+}
+
+public class TypoTests
+{
+    [Theory]
+    [InlineData("fuison")]  // swapped letters
+    [InlineData("fuision")] // an extra letter
+    [InlineData("fuson")]   // a missing letter
+    [InlineData("gusion")]  // g is next to f
+    [InlineData("fuzion")]  // z is next to s
+    public void Typos_still_find_the_word(string q) => Assert.InRange(FuzzyMatcher.Score(q, "Autodesk Fusion"), 50, 62);
+
+    [Fact]
+    public void A_neighbouring_key_is_likelier_than_a_far_one() =>
+        Assert.True(FuzzyMatcher.Score("gusion", "Fusion") > FuzzyMatcher.Score("pusion", "Fusion"));
+
+    [Fact]
+    public void The_closest_name_wins() =>
+        Assert.True(FuzzyMatcher.Score("gusion", "Fusion") > FuzzyMatcher.Score("gusion", "Vision"));
+
+    [Theory]
+    [InlineData("fus", "Fusion")]    // too short to guess
+    [InlineData("zzzzzz", "Fusion")]
+    public void No_guess(string q, string name) => Assert.True(FuzzyMatcher.Score(q, name) is 0 or >= 62);
+}

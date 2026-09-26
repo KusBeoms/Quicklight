@@ -2,11 +2,20 @@ namespace Quicklight.Core.Matching;
 
 /// <summary>
 /// Scores how well a query matches a name, 0 (no match) to 100 (exact).
-/// Tiers: exact > prefix > word-start/acronym > substring > choseong > ordered subsequence.
+/// Tiers: exact > prefix > word-start/acronym > substring > choseong > ordered subsequence > sound in the other script.
 /// </summary>
 public static class FuzzyMatcher
 {
     public static double Score(string query, string name)
+    {
+        var spelled = SpelledScore(query, name);
+        if (spelled >= 62 || string.IsNullOrWhiteSpace(query) || string.IsNullOrEmpty(name)) return spelled;
+        // Below a clean match: maybe a typo ("gusion" → Fusion), then maybe the other script ("애플뮤직" → Apple Music).
+        var typed = Math.Max(spelled, Typo.Score(query, name));
+        return typed > 0 ? typed : Phonetic.Score(query.Trim(), name);
+    }
+
+    static double SpelledScore(string query, string name)
     {
         if (string.IsNullOrWhiteSpace(query) || string.IsNullOrEmpty(name)) return 0;
         var q = query.Trim().ToLowerInvariant();
