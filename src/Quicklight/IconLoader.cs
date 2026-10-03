@@ -15,7 +15,12 @@ public sealed class IconLoader
     static readonly HashSet<string> PerItemExtensions = new(StringComparer.OrdinalIgnoreCase)
         { ".exe", ".lnk", ".ico", ".url", ".appref-ms", ".msc", ".cpl", ".scr", "" };
 
-    readonly ConcurrentDictionary<string, ImageSource?> _cache = new();
+    readonly ConcurrentDictionary<string, ImageSource> _cache = new();
+    // Icons that could not be read, and when: asked again after a while (a drive that was offline, a file still being written).
+    readonly ConcurrentDictionary<string, long> _failedAt = new();
+    const long RetryFailedMs = 60_000;
+    // Per-item icons (programs, shortcuts) add up over weeks of searching; 2000 × 96 px ≈ 70 MB at most.
+    const int MaxCached = 2000; // ponytail: dropped all at once when full, an LRU if the refill ever shows
     readonly BlockingCollection<(string Source, string Key, int Generation, Action<ImageSource?> Done)> _queue = new();
     readonly int _size;
     int _generation;
@@ -36,8 +41,17 @@ public sealed class IconLoader
     {
         var key = CacheKey(source, isFolder);
         if (_cache.TryGetValue(key, out var cached)) { done(cached); return; }
+        // On another machine: reading the icon can wait on the network for many seconds, and this one thread serves
+        // every row. Such items get their type's icon if one is known already, else the kind's glyph.
+        if (RecentlyFailed(key) || !source.StartsWith("shell:", StringComparison.OrdinalIgnoreCase) && Quicklight.Core.Providers.PathProvider.IsNetwork(source))
+        {
+            done(null);
+            return;
+        }
         _queue.Add((source, key, generation, done));
     }
+
+    bool RecentlyFailed(string key) => _failedAt.TryGetValue(key, out var at) && Environment.TickCount64 - at < RetryFailedMs;
 
     static string CacheKey(string source, bool isFolder)
     {
@@ -102,7 +116,7 @@ public sealed class IconLoader
         foreach (var (source, key, generation, done) in _queue.GetConsumingEnumerable())
         {
             if (generation != Volatile.Read(ref _generation)) continue; // stale: those rows are gone
-            if (!_cache.TryGetValue(key, out var img))
+            if (!_cache.TryGetValue(key, out var img) && !RecentlyFailed(key))
             {
                 try
                 {
@@ -112,7 +126,17 @@ public sealed class IconLoader
                         img = Fit(px, _size);
                 }
                 catch (Exception ex) { Log.Error("icon " + source, ex); }
-                _cache[key] = img;
+                if (img is null)
+                {
+                    if (_failedAt.Count >= MaxCached) _failedAt.Clear();
+                    _failedAt[key] = Environment.TickCount64;
+                }
+                else
+                {
+                    if (_cache.Count >= MaxCached) _cache.Clear();
+                    _cache[key] = img;
+                    _failedAt.TryRemove(key, out _);
+                }
             }
             done(img);
         }

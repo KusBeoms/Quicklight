@@ -57,6 +57,9 @@ public partial class MainWindow : Window
 
     public IntPtr Handle { get; private set; }
 
+    /// <summary>Waits (briefly) for the recent queries to reach the disk: quitting must not lose or cut off the last one.</summary>
+    public void FlushRecent() => _recent.Flush(TimeSpan.FromSeconds(2));
+
     /// <summary>Keep the window open when it loses focus (--pinned, for screenshots and debugging).</summary>
     public bool Pinned { get; set; }
 
@@ -149,6 +152,7 @@ public partial class MainWindow : Window
     public void ShowLauncher()
     {
         var (work, scale, hz) = NativeUi.MonitorUnderCursor();
+        if (Math.Clamp(hz, 30, 500) != _frameRate) _blink = null;
         _frameRate = Math.Clamp(hz, 30, 500);
         int windowWidthPx = (int)(Width * scale);
         int x = work.Left + (work.Width - windowWidthPx) / 2;
@@ -186,7 +190,17 @@ public partial class MainWindow : Window
         // Wait for the first frame (layout, backdrop upload, bitmap cache) so the slow start is not eaten by the
         // time-based animation, which would otherwise jump ahead.
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () => { if (IsVisible && !_hiding) AnimateIn(); });
-        _ = _engine.WarmUpAsync();
+        _ = WarmUpAfterOpeningAsync();
+    }
+
+    /// <summary>
+    /// A due app rescan (every ten minutes, on opening) is heavy on the CPU and the GC: start it once the opening
+    /// animation (230 ms) is over, not during it. A timer, not the animation's end, so a quick close cannot skip it.
+    /// </summary>
+    async Task WarmUpAfterOpeningAsync()
+    {
+        await Task.Delay(400);
+        await _engine.WarmUpAsync();
     }
 
     public void HideLauncher()
@@ -286,12 +300,24 @@ public partial class MainWindow : Window
     // ---------- caret ----------
 
     // The native caret is hidden; this bar blinks with a soft fade instead.
-    // Layout is forced first so the character rects are current and the caret keeps up with typing.
+    // Layout is forced first so the character rects are current and the caret keeps up with typing. A keystroke raises
+    // several of these (text, selection, scroll), and each forced layout is of the whole window: one per keystroke,
+    // queued above input and rendering so it still lands before the frame is drawn.
+    bool _caretQueued;
+
     void SyncCaret()
     {
-        Query.UpdateLayout();
-        UpdateCaret();
+        if (_caretQueued) return;
+        _caretQueued = true;
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, () =>
+        {
+            _caretQueued = false;
+            Query.UpdateLayout();
+            UpdateCaret();
+        });
     }
+
+    DoubleAnimationUsingKeyFrames? _blink; // made again when the launcher opens on a monitor with another refresh rate
 
     void UpdateCaret()
     {
@@ -302,15 +328,19 @@ public partial class MainWindow : Window
         Caret.Height = r.Height;
         CaretMove.Y = p.Y;
         CaretMove.X = p.X - 1;
-        // Solid while typing or moving, then blink.
-        var blink = new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever };
-        blink.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.Zero)));
-        blink.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(500))));
-        blink.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(700)), new SineEase()));
-        blink.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(900))));
-        blink.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1100)), new SineEase()));
-        Timeline.SetDesiredFrameRate(blink, _frameRate);
-        Caret.BeginAnimation(OpacityProperty, blink);
+        // Solid while typing or moving, then blink: starting the animation again restarts it from solid.
+        if (_blink is null)
+        {
+            _blink = new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever };
+            _blink.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            _blink.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(500))));
+            _blink.KeyFrames.Add(new EasingDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(700)), new SineEase()));
+            _blink.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(900))));
+            _blink.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(1100)), new SineEase()));
+            Timeline.SetDesiredFrameRate(_blink, _frameRate);
+            _blink.Freeze();
+        }
+        Caret.BeginAnimation(OpacityProperty, _blink);
     }
 
     // ---------- shape ----------
@@ -409,8 +439,8 @@ public partial class MainWindow : Window
             var fast = await SearchOffUiAsync(text, FileStage.None, expandSystemFolders, expandSystemFiles, kinds, token);
             if (fast is null) return;
             Render(fast, keepSelection: false);
-            // Later passes bring files; skip them when file search is off.
-            if (appsOnly || _lastQuery.Length < 2 || !_settings.FileSearch) return;
+            // Later passes bring files, and network paths (too slow to check on every keystroke); skip them when there are neither.
+            if (appsOnly || (_lastQuery.Length < 2 || !_settings.FileSearch) && !PathProvider.IsNetworkQuery(_lastQuery)) return;
 
             // Wait for a pause in typing: every Everything query takes its whole index (about a second on a big one),
             // and one per keystroke kept it so busy that Windows took it for hung.
@@ -452,14 +482,19 @@ public partial class MainWindow : Window
         foreach (var group in results.Skip(1).GroupBy(r => ResultItem.KindLabel(r.Kind)))
             ordered.AddRange(group.Select(r => NewItem(r, group.Key)));
 
-        _items.Clear();
-        int generation = _icons.NextGeneration();
-        foreach (var item in ordered)
+        // A later file stage often brings the very same rows: keep them (and their containers, icons and a Space hold
+        // on one of them) instead of building them all again.
+        if (ordered.Count == 0 || !SameRows(ordered))
         {
-            _items.Add(item);
-            if (item.Result.Key == _armedKey) item.SetSubtitleOverride(ArmedText);
-            if (item.Result.Action == ActionType.Update && _updateStatus is not null) item.SetSubtitleOverride(_updateStatus);
-            LoadIcon(item, generation);
+            _items.Clear();
+            int generation = _icons.NextGeneration();
+            foreach (var item in ordered)
+            {
+                _items.Add(item);
+                if (item.Result.Key == _armedKey) item.SetSubtitleOverride(ArmedText);
+                if (item.Result.Action == ActionType.Update && _updateStatus is not null) item.SetSubtitleOverride(_updateStatus);
+                LoadIcon(item, generation);
+            }
         }
 
         // The armed command dropped out of the list: forget it, so it can never run on a single Enter later.
@@ -480,6 +515,20 @@ public partial class MainWindow : Window
         {
             if (Results.IsVisible && Results.SelectedIndex >= 0) SelectIn(Results, Results.SelectedIndex, disarm: false);
         });
+    }
+
+    /// <summary>The rows on screen show exactly these: same results, same order, same text.</summary>
+    bool SameRows(List<ResultItem> rows)
+    {
+        if (rows.Count != _items.Count) return false;
+        for (int i = 0; i < rows.Count; i++)
+        {
+            ResultItem a = rows[i], b = _items[i];
+            if (a.Group != b.Group || a.Result.Key != b.Result.Key || a.Title != b.Title || a.Result.Subtitle != b.Result.Subtitle
+                || a.Result.Action != b.Result.Action || a.Body != b.Body
+                || a.Result.IconSource != b.Result.IconSource || a.Result.App != b.Result.App) return false; // a rescan's new app entry
+        }
+        return true;
     }
 
     ResultItem NewItem(SearchResult r, string group) => new(r, group)
@@ -646,6 +695,8 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
+        // Menu key or Shift+F10 toggles the selected item's context menu on release (opening on press let the release close it).
+        if (IsMenuKey(e)) { e.Handled = true; return; }
         if (_previewOpen)
         {
             if (e.Key == Key.Space && e.IsRepeat) { e.Handled = true; return; } // still holding the Space that opened it
@@ -746,8 +797,27 @@ public partial class MainWindow : Window
         return -1;
     }
 
+    bool _menuKeyDown; // the release only counts if the press was Menu or Shift+F10 (Shift may be let go first)
+
+    bool IsMenuKey(KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key is not (Key.Apps or Key.F10)) return false;
+        if (e.IsDown) return _menuKeyDown = key == Key.Apps ? Keyboard.Modifiers == ModifierKeys.None : Keyboard.Modifiers == ModifierKeys.Shift;
+        var was = _menuKeyDown;
+        _menuKeyDown = false;
+        return was;
+    }
+
     void Query_PreviewKeyUp(object sender, KeyEventArgs e)
     {
+        if (IsMenuKey(e))
+        {
+            e.Handled = true;
+            if (ActiveList.SelectedItem is ResultItem sel && ActiveList.ItemContainerGenerator.ContainerFromItem(sel) is ListBoxItem row)
+                ShowMenu(ActiveList, sel, row, System.Windows.Controls.Primitives.PlacementMode.Bottom);
+            return;
+        }
         if (e.Key != Key.Space || !_holding) return;
         e.Handled = true;
         FinishHold();
@@ -812,11 +882,35 @@ public partial class MainWindow : Window
         e.Handled = true;
         list.SelectedItem = item;
         UpdateFooter();
+        ShowMenu(list, item, container, System.Windows.Controls.Primitives.PlacementMode.MousePoint);
+    }
+
+    void ShowMenu(ListBox list, ResultItem item, FrameworkElement container, System.Windows.Controls.Primitives.PlacementMode placement)
+    {
         var menu = BuildMenu(item);
         menu.PlacementTarget = container;
-        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+        menu.Placement = placement;
         list.ContextMenu = menu;
-        menu.Closed += (_, _) => Query.Focus();
+        void focusQuery(object? s, RoutedEventArgs a) => Query.Focus();
+        menu.Closed += focusQuery;
+        // Menu key / Shift+F10 again closes it; Up/Down move through the items, starting from the first.
+        // Right-clicking a row while the menu is open moves it there in one step; the default would close it, then the release would reopen it (a blink).
+        menu.AddHandler(Mouse.PreviewMouseDownOutsideCapturedElementEvent, new MouseButtonEventHandler((_, e) =>
+        {
+            if (e.ChangedButton != MouseButton.Right || e.OriginalSource is not DependencyObject src
+                || ItemsControl.ContainerFromElement(list, src) is not ListBoxItem row || row.DataContext is not ResultItem next) return;
+            e.Handled = true;
+            menu.Closed -= focusQuery;
+            menu.IsOpen = false;
+            list.SelectedItem = next;
+            UpdateFooter();
+            ShowMenu(list, next, row, placement);
+        }));
+        menu.PreviewKeyDown += (_, e) => { if (IsMenuKey(e)) e.Handled = true; };
+        menu.PreviewKeyUp += (_, e) => { if (IsMenuKey(e)) { menu.IsOpen = false; e.Handled = true; } };
+        if (placement == System.Windows.Controls.Primitives.PlacementMode.Bottom)
+            menu.Opened += (_, _) => menu.Dispatcher.BeginInvoke(() => (menu.ItemContainerGenerator.ContainerFromIndex(0) as MenuItem)?.Focus(),
+                System.Windows.Threading.DispatcherPriority.Input);
         menu.IsOpen = true;
     }
 
@@ -870,18 +964,38 @@ public partial class MainWindow : Window
 
     readonly Dictionary<ListBox, Rect> _glassAt = [];
 
+    sealed record GlassParts(Grid Glass, Grid Host, Border Lens, Grid Light);
+    readonly Dictionary<ListBox, GlassParts> _glassParts = [];
+
+    /// <summary>The glass pane's pieces in the list's template (a static resource, so applied once), looked up once.</summary>
+    GlassParts? PartsOf(ListBox list)
+    {
+        if (_glassParts.TryGetValue(list, out var parts)) return parts;
+        if (list.Template.FindName("Glass", list) is not Grid glass || list.Template.FindName("GlassHost", list) is not Grid host
+            || list.Template.FindName("GlassLens", list) is not Border lens || list.Template.FindName("GlassLight", list) is not Grid light) return null;
+        return _glassParts[list] = new GlassParts(glass, host, lens, light);
+    }
+
     /// <summary>Glides the list's glass pane onto the selected item.</summary>
     void MoveGlass(ListBox list)
     {
-        if (list.Template.FindName("Glass", list) is not Grid glass || list.Template.FindName("GlassHost", list) is not Grid host) return;
-        if (!list.IsVisible || list.ItemContainerGenerator.ContainerFromIndex(list.SelectedIndex) is not ListBoxItem c
+        // LayoutUpdated comes for every layout pass anywhere in the window (every frame while the card animates), to all
+        // three lists: a hidden one only makes sure its glass is hidden, so it does not slide in from an old spot later.
+        if (!list.IsVisible)
+        {
+            if (_glassAt.Remove(list) && _glassParts.TryGetValue(list, out var hidden)) hidden.Glass.Visibility = Visibility.Hidden;
+            return;
+        }
+        if (PartsOf(list) is not { } parts) return;
+        var (glass, host) = (parts.Glass, parts.Host);
+        if (list.ItemContainerGenerator.ContainerFromIndex(list.SelectedIndex) is not ListBoxItem c
             || VisualTreeHelper.GetParent(c) is not Visual parent || !host.IsAncestorOf(c))
         {
             glass.Visibility = Visibility.Hidden;
             _glassAt.Remove(list);
             return;
         }
-        UpdateLens(list, glass);
+        UpdateLens(parts);
         // Layout position only: the Space-hold swell (a render transform on the row) is shared with the glass instead.
         var at = new Rect(parent.TransformToVisual(host).Transform((Point)VisualTreeHelper.GetOffset(c)), c.RenderSize);
         if (_glassAt.TryGetValue(list, out var was) && was == at) return;
@@ -907,9 +1021,9 @@ public partial class MainWindow : Window
     /// Shows the blurred backdrop behind the glass, magnified about its center, as if seen through a lens. Runs on
     /// every layout pass, so it follows the glass while it slides and the list while it scrolls.
     /// </summary>
-    void UpdateLens(ListBox list, Grid glass)
+    void UpdateLens(GlassParts parts)
     {
-        if (list.Template.FindName("GlassLens", list) is not Border lens || list.Template.FindName("GlassLight", list) is not Grid light) return;
+        var (glass, lens, light) = (parts.Glass, parts.Lens, parts.Light);
         // The inner light is blurred; keep it inside the rounded pane.
         var size = glass.RenderSize;
         if (light.Clip is not RectangleGeometry clip || clip.Rect.Size != size)
@@ -1347,7 +1461,7 @@ public partial class MainWindow : Window
                 info = $"{FileTypeLabel.For(file.Name, false)} · {FormatSize(file.Length)} · 수정 {file.LastWriteTime:yyyy-MM-dd HH:mm}";
                 if (FileTypeLabel.IsPlainText(path)) text = await Task.Run(() => ReadTextHead(path));
                 else if (FileTypeLabel.IsImage(path)) image = await Task.Run(() => LoadImage(path));
-                else if (await RunSta(() => ShellIcons.Get(path, 512, thumbnail: true)) is { } px)
+                else if (await ThumbnailAsync(path, generation) is { } px)
                     image = Frozen(BitmapSource.Create(px.Width, px.Height, 96, 96, PixelFormats.Pbgra32, null, px.Bgra, px.Width * 4));
             }
         }
@@ -1411,6 +1525,25 @@ public partial class MainWindow : Window
         < 1024L * 1024 * 1024 => $"{bytes / 1024.0 / 1024:0.#} MB",
         _ => $"{bytes / 1024.0 / 1024 / 1024:0.##} GB",
     };
+
+    Task<IconPixels?>? _thumbnailRun;
+    long _thumbnailStartedAt;
+
+    /// <summary>
+    /// One thumbnail at a time, the latest request wins: ↑↓ through a folder of videos must not start a thread per file.
+    /// A shell extension that hangs keeps its thread; after a few seconds the next preview gets a fresh one.
+    /// </summary>
+    async Task<IconPixels?> ThumbnailAsync(string path, int generation)
+    {
+        while (_thumbnailRun is { IsCompleted: false } running && Environment.TickCount64 - _thumbnailStartedAt < 3000)
+        {
+            await Task.WhenAny(running, Task.Delay(100));
+            if (generation != _previewGeneration) return null; // moved on meanwhile
+        }
+        _thumbnailStartedAt = Environment.TickCount64;
+        var run = _thumbnailRun = RunSta(() => ShellIcons.Get(path, 512, thumbnail: true));
+        return await run;
+    }
 
     /// <summary>Shell thumbnails are COM and want an STA thread; the UI thread must not wait on a slow video thumbnail.</summary>
     static Task<T> RunSta<T>(Func<T> work)

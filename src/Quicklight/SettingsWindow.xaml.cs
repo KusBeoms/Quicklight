@@ -52,6 +52,7 @@ public partial class SettingsWindow : Window
     void Fill(QuicklightSettings s)
     {
         HotkeyBox.Text = s.Hotkey;
+        HangulHotkey.IsChecked = s.HangulHotkey;
         (s.Theme switch { "dark" => ThemeDark, "light" => ThemeLight, _ => ThemeSystem }).IsChecked = true;
         (s.Backdrop == "solid" ? BackdropSolid : BackdropAcrylic).IsChecked = true;
         LaunchAtStartup.IsChecked = s.LaunchAtStartup;
@@ -82,6 +83,7 @@ public partial class SettingsWindow : Window
     {
         var s = _settings;
         s.Hotkey = HotkeyBox.Text;
+        s.HangulHotkey = HangulHotkey.IsChecked == true;
         s.Theme = ThemeDark.IsChecked == true ? "dark" : ThemeLight.IsChecked == true ? "light" : "system";
         s.Backdrop = BackdropSolid.IsChecked == true ? "solid" : "acrylic";
         s.LaunchAtStartup = LaunchAtStartup.IsChecked == true;

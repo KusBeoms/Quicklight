@@ -53,6 +53,21 @@ public static class Hangul
         return map;
     }
 
+    // "ㄻ" -> "ㄹㅁ": the Korean IME joins two consonants typed in a row into one compound jamo ("ㅋㄹㅁ" arrives as "ㅋㄻ").
+    static readonly Dictionary<char, string> CompoundToPair = JongPairs.ToDictionary(p => p.Value, p => $"{p.Key.Item1}{p.Key.Item2}");
+
+    /// <summary>
+    /// Compound consonant jamo split into the two they are made of ("ㅋㄻ" -> "ㅋㄹㅁ"), so a query of initial consonants
+    /// typed with the IME on means what was typed. Syllables are left alone; the text itself is returned when there is nothing to split.
+    /// </summary>
+    public static string SplitCompoundJamo(string s)
+    {
+        if (!s.Any(CompoundToPair.ContainsKey)) return s;
+        var sb = new StringBuilder(s.Length + 2);
+        foreach (var c in s) sb.Append(CompoundToPair.TryGetValue(c, out var pair) ? pair : c.ToString());
+        return sb.ToString();
+    }
+
     public static bool IsSyllable(char c) => c >= SBase && c < SBase + SCount;
     public static bool IsJamo(char c) => c >= 0x3131 && c <= 0x3163;
     public static bool IsConsonantJamo(char c) => c >= 0x3131 && c <= 0x314E;

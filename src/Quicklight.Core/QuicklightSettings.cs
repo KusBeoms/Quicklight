@@ -12,6 +12,12 @@ public sealed class QuicklightSettings
     /// <summary>Global hotkey, e.g. "Alt+Space", "Ctrl+Shift+Space", "Win+Alt+K".</summary>
     public string Hotkey { get; set; } = "Alt+Space";
 
+    /// <summary>
+    /// Also open with the 한/영 key held and the hotkey's key pressed ("Hangul+Space" for "Alt+Space"). The hotkey itself
+    /// keeps working. Off by default: it takes the 한/영 key into a keyboard hook (see HangulCombo).
+    /// </summary>
+    public bool HangulHotkey { get; set; }
+
     /// <summary>{0} is replaced by the URL-encoded query.</summary>
     public string WebSearchUrl { get; set; } = "https://www.google.com/search?q={0}";
 
@@ -117,7 +123,11 @@ public sealed class QuicklightSettings
         try
         {
             if (File.Exists(path))
-                return JsonSerializer.Deserialize<QuicklightSettings>(File.ReadAllText(path), JsonOptions) ?? new();
+            {
+                var loaded = JsonSerializer.Deserialize<QuicklightSettings>(File.ReadAllText(path), JsonOptions) ?? new();
+                loaded.MoveHangulOutOfHotkey();
+                return loaded;
+            }
             var s = new QuicklightSettings();
             s.Save(path);
             return s;
@@ -127,6 +137,22 @@ public sealed class QuicklightSettings
             Log.Error("settings load failed", ex);
             return new QuicklightSettings();
         }
+    }
+
+    static bool IsHangulToken(string part) => part.Equals("Hangul", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// "Hangul+Alt+Space" (the 한/영 key inside the hotkey, how an earlier build wrote it) becomes the hotkey "Alt+Space"
+    /// with <see cref="HangulHotkey"/> on. Without a modifier of its own left ("Hangul+Space") the hotkey gets Alt.
+    /// </summary>
+    internal void MoveHangulOutOfHotkey()
+    {
+        var parts = (Hotkey ?? "").Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (!parts.Any(IsHangulToken)) return;
+        HangulHotkey = true;
+        var rest = parts.Where(p => !IsHangulToken(p)).ToList();
+        bool modifier = rest.Any(p => p.ToLowerInvariant() is "alt" or "ctrl" or "control" or "shift" or "win" or "windows");
+        Hotkey = rest.Count == 0 ? "Alt+Space" : string.Join("+", modifier ? rest : rest.Prepend("Alt"));
     }
 
     public void Save(string? path = null)

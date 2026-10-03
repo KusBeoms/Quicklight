@@ -34,10 +34,23 @@ public sealed class RecentQueries
         _items.Insert(0, q);
         if (_items.Count > Max) _items.RemoveRange(Max, _items.Count - Max);
         if (_path is null) return;
+        // Off the UI thread: %APPDATA% can be a redirected network folder. Saves are chained, so an older list never
+        // lands after a newer one, and each writes a copy taken here.
+        var snapshot = _items.ToArray();
+        _saving = _saving.ContinueWith(_ => Save(snapshot), TaskScheduler.Default);
+    }
+
+    Task _saving = Task.CompletedTask;
+
+    /// <summary>Waits for the saves started so far (tests, shutdown), at most <paramref name="timeout"/> when given.</summary>
+    public void Flush(TimeSpan? timeout = null) => _saving.Wait(timeout ?? Timeout.InfiniteTimeSpan);
+
+    void Save(string[] items)
+    {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            File.WriteAllText(_path, JsonSerializer.Serialize(_items)); // ten short strings: no need for a worker thread
+            Directory.CreateDirectory(Path.GetDirectoryName(_path!)!);
+            File.WriteAllText(_path!, JsonSerializer.Serialize(items));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Error("recent queries save failed", ex); }
     }

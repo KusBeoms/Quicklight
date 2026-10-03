@@ -22,6 +22,8 @@ public sealed class UsageStore
     readonly string? _path;
     readonly object _gate = new();
     List<Entry> _entries = [];
+    // The same entries by key, oldest first: Boost runs for every result of every keystroke.
+    readonly Dictionary<string, List<Entry>> _byKey = [];
 
     public UsageStore(string? path)
     {
@@ -31,6 +33,7 @@ public sealed class UsageStore
         {
             var stored = (JsonSerializer.Deserialize<List<Stored?>>(File.ReadAllText(path)) ?? []).Where(e => e?.Key is not null).Select(e => e!).ToList();
             _entries = stored.Select(e => new Entry(e.Key!, e.When, e.Typed ?? e.Query?.Trim().Length ?? 0, e.Strength ?? 0)).ToList();
+            foreach (var e in _entries) Index(e);
             if (stored.Exists(e => e.Query is not null)) ScheduleSave(); // drop the old queries from disk
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException) { Log.Error("history load failed", ex); }
@@ -42,10 +45,29 @@ public sealed class UsageStore
     {
         lock (_gate)
         {
-            _entries.Add(new Entry(key, when ?? DateTime.Now, typed, strength));
-            if (_entries.Count > MaxEntries) _entries.RemoveRange(0, _entries.Count - MaxEntries);
+            var entry = new Entry(key, when ?? DateTime.Now, typed, strength);
+            _entries.Add(entry);
+            Index(entry);
+            if (_entries.Count > MaxEntries)
+            {
+                int drop = _entries.Count - MaxEntries;
+                // The dropped entries are the oldest of their keys, so each is at the front of its list.
+                for (int i = 0; i < drop; i++)
+                {
+                    var list = _byKey[_entries[i].Key];
+                    list.RemoveAt(0);
+                    if (list.Count == 0) _byKey.Remove(_entries[i].Key);
+                }
+                _entries.RemoveRange(0, drop);
+            }
         }
         ScheduleSave();
+    }
+
+    void Index(Entry e)
+    {
+        if (!_byKey.TryGetValue(e.Key, out var list)) _byKey[e.Key] = list = [];
+        list.Add(e);
     }
 
     int _saveQueued;
@@ -76,9 +98,9 @@ public sealed class UsageStore
         double frecency = 0, learned = 0, match = -1;
         lock (_gate)
         {
-            foreach (var e in _entries)
+            if (!_byKey.TryGetValue(key, out var entries)) return 0;
+            foreach (var e in entries)
             {
-                if (e.Key != key) continue;
                 double decay = Math.Pow(0.5, (t - e.When).TotalDays / HalfLife.TotalDays);
                 frecency += decay;
                 // A weaker match than back then is a different query (Chrome picked for "ch" says nothing about "cm").
@@ -94,7 +116,11 @@ public sealed class UsageStore
 
     public void Clear()
     {
-        lock (_gate) _entries.Clear();
+        lock (_gate)
+        {
+            _entries.Clear();
+            _byKey.Clear();
+        }
         ScheduleSave();
     }
 

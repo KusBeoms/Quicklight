@@ -213,6 +213,12 @@
                                 <TextBlock Text="칸을 누르고 새 조합을 누르십시오" Style="{StaticResource Hint}" />
                             </StackPanel>
                         </DockPanel>
+                        <CheckBox x:Name="HangulHotkey">
+                            <StackPanel>
+                                <TextBlock Text="한/영 키를 누른 채로 열기" />
+                                <TextBlock Text="켜면 한/영 키를 누른 채 단축키의 글쇠(예: Space)를 눌러도 열립니다. 위 단축키는 그대로 쓸 수 있습니다. 한/영 키만 누르면 평소처럼 전환되지만 키를 뗄 때 전환됩니다" Style="{StaticResource Hint}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </CheckBox>
                         <DockPanel Style="{StaticResource Line}">
                             <Border DockPanel.Dock="Right" Style="{StaticResource Segments}">
                                 <StackPanel Orientation="Horizontal">

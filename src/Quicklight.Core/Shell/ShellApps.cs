@@ -50,6 +50,7 @@ public sealed class AppEntry
     internal void Add(AppPart part)
     {
         if (!_parts.Exists(p => p.Kind == part.Kind && string.Equals(p.Target, part.Target, StringComparison.OrdinalIgnoreCase))) _parts.Add(part);
+        _launch = null;
     }
 
     internal void AddAlias(string alias)
@@ -59,14 +60,22 @@ public sealed class AppEntry
 
     public AppPart? Part(AppPartKind kind) => _parts.Find(p => p.Kind == kind);
 
-    /// <summary>What Enter runs: package, shortcut, executable, installer, whichever comes first and still exists. Never a tool or the uninstaller.</summary>
-    public AppPart Launch
+    AppPart? _launch;
+
+    /// <summary>
+    /// What Enter runs: package, shortcut, executable, installer, whichever comes first and exists. Never a tool or the
+    /// uninstaller. Worked out once (every result row and grid tile asks, and a file check on an unreachable network
+    /// share takes seconds); <see cref="RecheckLaunch"/> looks at the disk again.
+    /// </summary>
+    public AppPart Launch => _launch ??= FindLaunch();
+
+    /// <summary>Looks at the disk again: a part may have appeared or gone since <see cref="Launch"/> was worked out.</summary>
+    public AppPart RecheckLaunch() => _launch = FindLaunch();
+
+    AppPart FindLaunch()
     {
-        get
-        {
-            var runnable = _parts.Where(p => p.IsMain).OrderBy(p => p.Kind).ToList();
-            return runnable.Find(p => p.Exists) ?? runnable[0];
-        }
+        var runnable = _parts.Where(p => p.IsMain).OrderBy(p => p.Kind).ToList();
+        return runnable.Find(p => p.Exists) ?? runnable[0];
     }
 
     public string LaunchTarget => Launch.LaunchTarget;
@@ -205,20 +214,18 @@ public static class ShellApps
         string[] WordsOf(AppEntry a) => words.TryGetValue(a, out var w) ? w : words[a] = Words(a.Name);
         string ExactOf(AppEntry a) => exact.TryGetValue(a, out var e) ? e : exact[a] = string.Concat(Words(a.Name, keepVersions: true));
         // Loose, for uninstall/install shortcuts and installer files: "Uninstall Zoom" and "ZoomInstaller" belong to "Zoom Workplace".
-        bool SameStem(AppEntry a, string name, bool fileName = false)
-        {
-            var stem = Stem(name, fileName);
-            return stem.Length >= 3 && (string.Concat(WordsOf(a)) == stem || WordsOf(a).Contains(stem));
-        }
+        // The piece's stem is worked out by the caller, once: these run for every (piece, app) pair.
+        bool SameStem(AppEntry a, string stem) => stem.Length >= 3 && (string.Concat(WordsOf(a)) == stem || WordsOf(a).Contains(stem));
         // Strict, for registry entries, which name whole products: versions count ("Python 3.12" is not IDLE for 3.11).
-        bool SameProduct(AppEntry a, string name) => ExactOf(a).Length >= 3 && ExactOf(a) == string.Concat(Words(name, keepVersions: true));
+        bool SameProduct(AppEntry a, string exactName) => ExactOf(a).Length >= 3 && ExactOf(a) == exactName;
 
         var primaries = apps.ToList();
         foreach (var (s, role) in extras)
         {
             var kind = role switch { Role.Uninstaller => AppPartKind.Uninstaller, Role.Tool => AppPartKind.Tool, _ => AppPartKind.Installer };
             var dir = IsExe(s.Target) ? Path.GetDirectoryName(s.Target) : null;
-            var owners = primaries.Where(a => SameStem(a, s.Name) || dir is not null && a.ExePath is { } exe && IsUnder(exe, dir)).ToList();
+            var stem = Stem(s.Name);
+            var owners = primaries.Where(a => SameStem(a, stem) || dir is not null && a.ExePath is { } exe && IsUnder(exe, dir)).ToList();
             foreach (var a in owners) a.Add(new AppPart(kind, s.Path));
             // An installer or tool nobody claims is an app of its own ("Visual Studio Installer" with no Visual Studio).
             if (owners.Count == 0 && role != Role.Uninstaller) Named(s.Name).Add(new AppPart(AppPartKind.Shortcut, s.Path));
@@ -226,7 +233,8 @@ public static class ShellApps
 
         foreach (var p in programs)
         {
-            var owners = primaries.Where(a => SameProduct(a, p.Name) || Owns(a, p)).ToList();
+            var exactName = string.Concat(Words(p.Name, keepVersions: true));
+            var owners = primaries.Where(a => SameProduct(a, exactName) || Owns(a, p)).ToList();
             if (owners.Count == 0 && p.Runnable && RoleOf(p.Name) == Role.App)
             {
                 var app = Named(p.Name);
@@ -244,8 +252,11 @@ public static class ShellApps
         }
 
         foreach (var file in installers)
-            foreach (var a in primaries.Where(a => SameStem(a, Path.GetFileNameWithoutExtension(file), fileName: true)))
+        {
+            var stem = Stem(Path.GetFileNameWithoutExtension(file), fileName: true);
+            foreach (var a in primaries.Where(a => SameStem(a, stem)))
                 a.Add(new AppPart(AppPartKind.Installer, file));
+        }
 
         return apps;
     }

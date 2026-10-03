@@ -33,7 +33,7 @@ public static class Typo
             // The word, and the prefixes about as long as the query: "gusi" is on its way to "fusion".
             int end = start;
             while (end < lower.Length && char.IsAsciiLetterLower(lower[end])) end++;
-            var word = lower[start..end];
+            var word = lower.AsSpan(start, end - start);
             if (word.Length < 3) continue;
             best = Math.Min(best, Distance(q, word));
             for (int len = q.Length - 1; len <= q.Length + 1; len++)
@@ -43,19 +43,24 @@ public static class Typo
     }
 
     /// <summary>Keyboard-weighted edit distance with swaps (optimal string alignment).</summary>
-    internal static double Distance(string a, string b)
+    internal static double Distance(ReadOnlySpan<char> a, ReadOnlySpan<char> b)
     {
-        var d = new double[a.Length + 1, b.Length + 1];
-        for (int i = 0; i <= a.Length; i++) d[i, 0] = i;
-        for (int j = 0; j <= b.Length; j++) d[0, j] = j;
+        // Runs for most names on every keystroke: one table per thread instead of one per call. Searches run in parallel,
+        // so the table must never be shared between threads.
+        int w = b.Length + 1, size = (a.Length + 1) * w;
+        if (_table is not { } d || d.Length < size) _table = d = new double[Math.Max(size, 1024)];
+        for (int i = 0; i <= a.Length; i++) d[i * w] = i;
+        for (int j = 0; j <= b.Length; j++) d[j] = j;
         for (int i = 1; i <= a.Length; i++)
             for (int j = 1; j <= b.Length; j++)
             {
                 double substitute = a[i - 1] == b[j - 1] ? 0 : Adjacent(a[i - 1], b[j - 1]) ? Near : 1;
-                double v = Math.Min(Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1), d[i - 1, j - 1] + substitute);
-                if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) v = Math.Min(v, d[i - 2, j - 2] + Swap);
-                d[i, j] = v;
+                double v = Math.Min(Math.Min(d[(i - 1) * w + j] + 1, d[i * w + j - 1] + 1), d[(i - 1) * w + j - 1] + substitute);
+                if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) v = Math.Min(v, d[(i - 2) * w + j - 2] + Swap);
+                d[i * w + j] = v;
             }
-        return d[a.Length, b.Length];
+        return d[a.Length * w + b.Length];
     }
+
+    [ThreadStatic] static double[]? _table;
 }

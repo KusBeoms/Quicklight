@@ -80,6 +80,22 @@ public sealed class PathProvider(bool probeRemote = true) : IResultProvider
 {
     public static bool IsRemoteOrDevice(string path) => path.StartsWith(@"\\") || path.StartsWith("//");
 
+    /// <summary>A path on another machine: UNC or a mapped network drive. Checking one can wait seconds for the network.</summary>
+    public static bool IsNetwork(string path)
+    {
+        if (IsRemoteOrDevice(path)) return true;
+        if (path.Length < 2 || path[1] != ':' || !char.IsAsciiLetter(path[0])) return false;
+        try { return new DriveInfo(path[..1]).DriveType == DriveType.Network; } // GetDriveType: no network round-trip
+        catch (ArgumentException) { return false; }
+    }
+
+    /// <summary>True for text that <see cref="QueryAsync"/> only answers in the later (typing paused) stages.</summary>
+    public static bool IsNetworkQuery(string text) => Expand(text) is { } path && IsNetwork(path);
+
+    // The last network answer, for the stage that follows it with the same text.
+    (string Path, List<(string Path, bool IsDir, double Score)> Found, long At)? _networkCache;
+    readonly object _cacheGate = new();
+
     public string Name => "path";
 
     public static string? Expand(string text)
@@ -98,15 +114,35 @@ public sealed class PathProvider(bool probeRemote = true) : IResultProvider
 
     public Task<IReadOnlyList<SearchResult>> QueryAsync(QueryContext query, CancellationToken ct)
     {
-        var results = new List<SearchResult>();
         var path = query.IsAlternate ? null : Expand(query.Text);
-        if (path is null || (!probeRemote && IsRemoteOrDevice(path))) return Task.FromResult<IReadOnlyList<SearchResult>>(results);
+        if (path is null || (!probeRemote && IsRemoteOrDevice(path))) return Task.FromResult<IReadOnlyList<SearchResult>>([]);
+        // Every keystroke of "\\server\share" would wait on name lookups for servers "\\s", "\\se", ...: only once typing
+        // pauses (the launcher's file stages), and never holding back the instant results.
+        bool network = IsNetwork(path);
+        List<(string Path, bool IsDir, double Score)>? found = null;
+        if (network)
+        {
+            // The path as typed, unchecked, so a pasted path is there for an Enter right away; the later stage checks it.
+            if (query.Files == FileStage.None) return Task.FromResult<IReadOnlyList<SearchResult>>([Make(path, false, Scores.ExactPath)]);
+            lock (_cacheGate)
+                if (_networkCache is { } c && c.Path == path && Environment.TickCount64 - c.At < 3000) found = c.Found;
+        }
+        if (found is null)
+        {
+            found = Find(path);
+            if (network) lock (_cacheGate) _networkCache = (path, found, Environment.TickCount64);
+        }
+        // New rows every time: the engine adds its learning boost to each row's score.
+        return Task.FromResult<IReadOnlyList<SearchResult>>(found.Select(f => Make(f.Path, f.IsDir, f.Score)).ToList());
+    }
+
+    static List<(string Path, bool IsDir, double Score)> Find(string path)
+    {
+        var found = new List<(string, bool, double)>();
         try
         {
-            if (Directory.Exists(path) || File.Exists(path))
-            {
-                results.Add(Make(path, Scores.ExactPath));
-            }
+            if (Directory.Exists(path)) found.Add((path, true, Scores.ExactPath));
+            else if (File.Exists(path)) found.Add((path, false, Scores.ExactPath));
             else
             {
                 var dir = Path.GetDirectoryName(path);
@@ -117,19 +153,18 @@ public sealed class PathProvider(bool probeRemote = true) : IResultProvider
                     foreach (var entry in new DirectoryInfo(dir).EnumerateFileSystemInfos(prefix + "*"))
                     {
                         if ((entry.Attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0) continue;
-                        results.Add(Make(entry.FullName, Scores.PathCompletion - i));
+                        found.Add((entry.FullName, entry is DirectoryInfo, Scores.PathCompletion - i));
                         if (++i >= 8) break;
                     }
                 }
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or System.Security.SecurityException) { }
-        return Task.FromResult<IReadOnlyList<SearchResult>>(results);
+        return found;
     }
 
-    static SearchResult Make(string path, double score)
+    static SearchResult Make(string path, bool isDir, double score)
     {
-        bool isDir = Directory.Exists(path);
         var name = Path.GetFileName(path.TrimEnd('\\'));
         return new SearchResult
         {

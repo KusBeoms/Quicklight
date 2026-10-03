@@ -115,6 +115,51 @@ public class PhoneticTests
         Assert.InRange(FuzzyMatcher.Score(query, name), 50, 70);
 
     [Theory]
+    [InlineData("ㅋㄹㅁ", "Chrome", 80)]            // 크롬
+    [InlineData("ㅋㄹ", "Chrome", 80)]              // the ㅁ is a final consonant, which initials do not show
+    [InlineData("ㅋㄹ", "Google Chrome", 80)]       // a later word
+    [InlineData("ㄷㅅㅋㄷ", "Discord", 80)]         // 디스코드
+    [InlineData("ㅍㅌㅅ", "Photoshop", 80)]         // 포토샵
+    [InlineData("ㅇㅍㅁㅈ", "Apple Music", 70)]     // 애플뮤직: two words, the ㄹ of 플 sits between ㅍ and ㅁ
+    [InlineData("ㄱㅎㅂ", "GitHub", 70)]            // 깃허브: the ㅅ of 깃 sits between ㄱ and ㅎ
+    [InlineData("ㅋㄹㅁ", "Chromecast", 60)]        // the start of a word only
+    [InlineData("ㅋㄹㅁ", "Visual Chromecast", 54)]
+    [InlineData("ㅋㄹ", "Claude", 0)]               // 클로드 is three syllables: ㅋㄹ is not all of it
+    [InlineData("ㅋㄹ", "Calendar", 0)]
+    [InlineData("ㅋㄹ", "Copilot", 0)]
+    [InlineData("ㅋㄹ", "iCloud", 0)]
+    [InlineData("ㅋㄹ", "Cloudflare WARP", 0)]
+    [InlineData("ㅋㄹ", "Gyroflow", 0)]              // first and last sound only
+    [InlineData("ㅋㄹ", "Google Gemini", 0)]         // 구글: ㄱㄱ, the ㅋ would be a repeat of the ㄱ
+    [InlineData("ㅋㄹ", "Spreadsheet Compare", 0)]
+    [InlineData("ㅋㄹ", "NVIDIA Control Panel", 0)]
+    [InlineData("ㅋㄹ", "Global Flags (ARM)", 0)]
+    [InlineData("ㅋㄹㅁ", "Google Gemini", 0)]
+    [InlineData("ㅍㅌ", "Photoshop", 0)]            // two initials only count for a whole word
+    [InlineData("ㅍㅌㅅ", "Chrome", 0)]
+    [InlineData("ㅂㅈㅇ", "Notepad", 0)]
+    public void Initial_consonants_find_names_in_the_other_script(string query, string name, double expected) =>
+        Assert.Equal(expected, FuzzyMatcher.Score(query, name));
+
+    [Theory]
+    [InlineData("ㅋㄻ", "ㅋㄹㅁ")] // ㄹ+ㅁ
+    [InlineData("ㄳ", "ㄱㅅ")]
+    [InlineData("ㅄㅇ", "ㅂㅅㅇ")]
+    [InlineData("ㅍㄿ", "ㅍㄹㅍ")]
+    [InlineData("카카오톡", "카카오톡")] // syllables stay as they are
+    [InlineData("chrome", "chrome")]
+    public void The_IME_joins_consonants_typed_in_a_row(string typed, string meant) => Assert.Equal(meant, Hangul.SplitCompoundJamo(typed));
+
+    [Fact]
+    public void Joined_consonants_search_like_the_separate_ones()
+    {
+        Assert.Equal(FuzzyMatcher.Score("ㅋㄹㅁ", "Chrome"), FuzzyMatcher.Score("ㅋㄻ", "Chrome"));
+        Assert.Equal(80, FuzzyMatcher.Score("ㅋㄻ", "Chrome"));
+        Assert.Equal(FuzzyMatcher.Score("ㄱㅅ", "기사"), FuzzyMatcher.Score("ㄳ", "기사")); // 초성 of a Korean name
+        Assert.True(FuzzyMatcher.Score("ㄳ", "기사") > 0);
+    }
+
+    [Theory]
     [InlineData("크롬", "Calculator")]
     [InlineData("애플", "Paint")]
     [InlineData("유튜브", "3D 뷰어")] // only the name's Latin letters are compared with a Korean query

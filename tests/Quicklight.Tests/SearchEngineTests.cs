@@ -32,6 +32,9 @@ public class SearchEngineTests
     [InlineData("zkzkdhxhr", "카카오톡")]
     [InlineData("ㅊㅗ개ㅡㄷ", "Google Chrome")]
     [InlineData("메모", "메모장")]
+    [InlineData("ㅋㄹㅁ", "Google Chrome")] // initials of 크롬, for an English name
+    [InlineData("ㅂㅈㅇ", "Visual Studio Code")] // 비주얼
+    [InlineData("ㅋㄻ", "Google Chrome")] // the IME joins ㄹㅁ into ㄻ
     public async Task Top_hit_without_prefixes(string q, string expected) => Assert.Equal(expected, (await Top(Create(), q)).Title);
 
     [Fact]
@@ -173,6 +176,7 @@ public class SearchEngineTests
             for (int i = 1; i <= 12; i++) recent.Add($"q{i}");
             recent.Add(" q5 "); // again: moves to the front, no duplicate
             recent.Add("");
+            recent.Flush();
             var reloaded = new RecentQueries(path);
             Assert.Equal(["q5", "q12", "q11", "q10", "q9", "q8", "q7", "q6", "q4", "q3"], reloaded.Items);
         }

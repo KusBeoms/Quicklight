@@ -8,6 +8,7 @@ public static class FuzzyMatcher
 {
     public static double Score(string query, string name)
     {
+        query = Hangul.SplitCompoundJamo(query); // "ㅋㄻ": what the IME made of "ㅋㄹㅁ"
         var spelled = SpelledScore(query, name);
         if (spelled >= 62 || string.IsNullOrWhiteSpace(query) || string.IsNullOrEmpty(name)) return spelled;
         // Below a clean match: maybe a typo ("gusion" → Fusion), then maybe the other script ("애플뮤직" → Apple Music).

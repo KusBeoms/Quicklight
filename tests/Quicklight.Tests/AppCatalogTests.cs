@@ -147,9 +147,10 @@ public class AppCatalogTests
             File.WriteAllText(installer, "");
             Assert.Equal(installer, app.LaunchTarget); // only the installer is left
             File.WriteAllText(exe, "");
-            Assert.Equal(new AppPart(AppPartKind.Exe, exe, "--flag"), app.Launch);
+            Assert.Equal(installer, app.LaunchTarget); // worked out once, not on every look
+            Assert.Equal(new AppPart(AppPartKind.Exe, exe, "--flag"), app.RecheckLaunch());
             File.WriteAllText(lnk, "");
-            Assert.Equal(AppPartKind.Shortcut, app.Launch.Kind);
+            Assert.Equal(AppPartKind.Shortcut, app.RecheckLaunch().Kind);
             Assert.Equal(lnk, app.IconSource); // the icon follows what Enter runs, not the (often generic) program
         }
         finally { Directory.Delete(dir, true); }

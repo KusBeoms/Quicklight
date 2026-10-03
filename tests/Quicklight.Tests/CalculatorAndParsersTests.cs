@@ -99,4 +99,21 @@ public class UrlAndPathTests
         Assert.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), PathProvider.Expand(@"~\Downloads"));
         Assert.Null(PathProvider.Expand("chrome"));
     }
+
+    [Fact]
+    public async Task Network_paths_wait_for_a_pause_in_typing()
+    {
+        Assert.True(PathProvider.IsNetworkQuery(@"\\ql-no-such-host\share"));
+        Assert.False(PathProvider.IsNetworkQuery(@"C:\Windows"));
+        Assert.False(PathProvider.IsNetworkQuery("chrome"));
+        // The instant stage answers at once with the path as typed, without asking the network about the server
+        // (that would take seconds for a host that does not exist).
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var instant = await new PathProvider().QueryAsync(new QueryContext(@"\\ql-no-such-host\share", Files: FileStage.None), default);
+        Assert.Equal(@"\\ql-no-such-host\share", Assert.Single(instant).Target);
+        Assert.True(sw.ElapsedMilliseconds < 500);
+        // Local paths are still answered at once.
+        var local = await new PathProvider().QueryAsync(new QueryContext(@"C:\Windows", Files: FileStage.None), default);
+        Assert.Equal(@"C:\Windows", Assert.Single(local).Target);
+    }
 }

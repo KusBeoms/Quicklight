@@ -155,3 +155,27 @@ public class SnippetAndCommandTests
         Assert.Equal(["dev", "prod"], args.Order());
     }
 }
+
+public class RunningStateProviderTests
+{
+    [Fact]
+    public async Task Open_windows_are_found_by_title()
+    {
+        if (WindowProvider.List().FirstOrDefault(w => w.Title.Length >= 3) is not { } window) return; // no desktop session
+        var results = await new WindowProvider().QueryAsync(new QueryContext(window.Title), default);
+        Assert.Contains(results, r => r.Target == window.Handle.ToString());
+    }
+
+    [Fact]
+    public async Task Running_processes_are_found_by_name()
+    {
+        // Any other process of this session (our own is left out); a plain name, so it matches itself exactly.
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        var name = System.Diagnostics.Process.GetProcesses()
+            .Where(p => p.Id != self.Id && p.SessionId == self.SessionId && p.ProcessName != self.ProcessName)
+            .Select(p => p.ProcessName).FirstOrDefault(n => n.Length >= 4 && n.All(char.IsAsciiLetter));
+        if (name is null) return;
+        var results = await new ProcessProvider().QueryAsync(new QueryContext("kill " + name), default);
+        Assert.Contains(results, r => r.Title.Equals(name, StringComparison.OrdinalIgnoreCase));
+    }
+}

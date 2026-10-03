@@ -15,7 +15,7 @@ public sealed class WindowProvider : IResultProvider
 
     readonly object _gate = new();
     List<OpenWindow> _snapshot = [];
-    long _snapshotAt = long.MinValue;
+    long _snapshotAt; // 0: never taken (TickCount64 - long.MinValue would overflow and never refresh)
 
     // Off the UI thread: enumerating windows and their programs takes long enough to stutter typing.
     public Task<IReadOnlyList<SearchResult>> QueryAsync(QueryContext query, CancellationToken ct) =>
@@ -26,7 +26,7 @@ public sealed class WindowProvider : IResultProvider
     {
         lock (_gate)
         {
-            if (Environment.TickCount64 - _snapshotAt > 1000) { _snapshot = List(); _snapshotAt = Environment.TickCount64; }
+            if (_snapshotAt == 0 || Environment.TickCount64 - _snapshotAt > 1000) { _snapshot = List(); _snapshotAt = Environment.TickCount64; }
             return _snapshot;
         }
     }

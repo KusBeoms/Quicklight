@@ -220,6 +220,9 @@ public sealed class SearchEngine : IDisposable
     /// <summary>Runs Open/System actions. Copy actions are the caller's job (clipboard needs a UI thread).</summary>
     public static void Execute(SearchResult r)
     {
+        // An app's launch target is worked out once per index: a shortcut deleted since falls back to what is still there.
+        if (r.App is { } app && r.Target == app.Launch.LaunchTarget && !app.Launch.Exists && app.RecheckLaunch().LaunchTarget != r.Target)
+            r = AppProvider.ToResult(app, r.Score);
         switch (r.Action)
         {
             case ActionType.Open when r.Arguments is not null:

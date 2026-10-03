@@ -34,8 +34,11 @@ public sealed class ClipboardHistoryProvider : IResultProvider
         return ui.CheckAccess() ? await ListAsync(filter, ct) : await ui.InvokeAsync(() => ListAsync(filter, ct)).Task.Unwrap();
     }
 
+    int _listing; // listings await in between, so two can overlap: only the newest one prunes
+
     async Task<IReadOnlyList<SearchResult>> ListAsync(string filter, CancellationToken ct)
     {
+        int listing = ++_listing;
 
         if (!WinClipboard.IsHistoryEnabled())
             return
@@ -86,7 +89,21 @@ public sealed class ClipboardHistoryProvider : IResultProvider
                 Score = Scores.Clipboard + 50 - i++, // newest first, like Win+V
             });
         }
+        // Entries gone from Windows' history (it keeps 25) go here too: otherwise every text and thumbnail ever listed
+        // stays in memory for as long as the launcher runs. A filtered listing does not see every entry, so only a full one.
+        if (filter.Length == 0 && listing == _listing)
+        {
+            var current = history.Items.Select(item => item.Id).ToHashSet();
+            Keep(_items, current);
+            Keep(_texts, current);
+            Keep(_thumbnails, current);
+        }
         return results;
+    }
+
+    static void Keep<T>(Dictionary<string, T> entries, HashSet<string> ids)
+    {
+        foreach (var id in entries.Keys.Where(id => !ids.Contains(id)).ToList()) entries.Remove(id);
     }
 
     const int ThumbnailWidth = 480; // px: sharp on the card at up to 150 % scaling

@@ -158,7 +158,7 @@ public partial class App : Application
 
     void RegisterHotkey()
     {
-        if (_hotkey!.Register(_settings.Hotkey, out var error)) return;
+        if (_hotkey!.Register(_settings.Hotkey, _settings.HangulHotkey, out var error)) return;
         Log.Error($"hotkey {_settings.Hotkey} failed: {error}");
         _tray?.Notify("단축키 등록 실패", $"{_settings.Hotkey}: {error}");
     }
@@ -190,6 +190,7 @@ public partial class App : Application
         _hotkey?.Dispose();
         _tray?.Dispose();
         _usage?.Flush(); // a save queued by the last launch must not be lost when quitting right after
+        _window?.FlushRecent();
         _engine?.Dispose();
         if (_releaseForUpdate)
         {
