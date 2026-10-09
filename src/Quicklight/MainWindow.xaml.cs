@@ -70,6 +70,8 @@ public partial class MainWindow : Window
         _settings = settings;
         _updates = updates;
         InitializeComponent();
+        TerminalThumb.Attach(TerminalOutput);
+        AppGridThumb.Attach(AppGrid);
         ((CollectionViewSource)Resources["GroupedResults"]).Source = _items;
         ((CollectionViewSource)Resources["GroupedApps"]).Source = _apps;
         PreviewParts.ItemsSource = _parts;
@@ -211,6 +213,7 @@ public partial class MainWindow : Window
         Disarm();
         CancelHold();
         ClosePreview();
+        CloseTerminal();
         if (ActiveList.ContextMenu is { IsOpen: true } menu) menu.IsOpen = false;
         AnimateOut(() =>
         {
@@ -356,7 +359,7 @@ public partial class MainWindow : Window
     /// <summary>On the app screen the card widens (and, through the taller grid, grows) to show more apps.</summary>
     void SyncCardWidth()
     {
-        double w = AppGrid.Visibility == Visibility.Visible ? AppCardWidth : _clipMode ? ClipCardWidth : PillWidth;
+        double w = AppGrid.Visibility == Visibility.Visible || _terminalOpen ? AppCardWidth : _clipMode ? ClipCardWidth : PillWidth;
         if (!IsVisible) { ListSurface.BeginAnimation(WidthProperty, null); ListSurface.Width = w; return; }
         ListSurface.BeginAnimation(WidthProperty, Anim(null, w, 260, new CubicEase { EasingMode = EasingMode.EaseOut }));
     }
@@ -401,6 +404,7 @@ public partial class MainWindow : Window
         LockToGrid(AppCatalog.IsCatalogQuery(Query.Text));
         Disarm();
         ClosePreview();
+        CloseTerminal();
         if (AppCatalog.IsCatalogQuery(Query.Text))
         {
             _cts?.Cancel();
@@ -505,7 +509,7 @@ public partial class MainWindow : Window
         bool any = _items.Count > 0;
         SetClipMode(any && ordered.TrueForAll(i => i.Result.Kind == ResultKind.Clipboard));
         Results.Visibility = Footer.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
-        if (_previewOpen) Results.Visibility = Visibility.Collapsed; // a later file stage while the preview is open
+        if (_previewOpen || _terminalOpen) Results.Visibility = Visibility.Collapsed; // a later file stage while the preview or terminal is open
         if (!any) return;
         int index = selectedKey is null ? 0 : Math.Max(0, ordered.FindIndex(i => i.Result.Key == selectedKey));
         Select(index, disarm: false);
@@ -761,7 +765,8 @@ public partial class MainWindow : Window
                 if (Selected is { } item) Execute(item);
                 e.Handled = true; break;
             case Key.Escape:
-                if (_updateBusy && _updateCts is { IsCancellationRequested: false } updating) updating.Cancel(); // "Esc로 취소"
+                if (_terminalOpen) HideLauncher(); // the first Esc (in the terminal input) already moved here; this one closes
+                else if (_updateBusy && _updateCts is { IsCancellationRequested: false } updating) updating.Cancel(); // "Esc로 취소"
                 else if (_armedKey is not null) Disarm();
                 else if (_typeAhead.Length > 0) ClearTypeAhead();
                 else if (Query.Text.Length > 0) Query.Clear();
@@ -1057,6 +1062,7 @@ public partial class MainWindow : Window
         var r = item.Result;
         if (r.Action == ActionType.None) return; // informational row
         if (r.Action == ActionType.Update) { _ = RunUpdateAsync(); return; }
+        if (r.Action == ActionType.Terminal) { _recent.Add(Query.Text); OpenTerminal(r.Target); return; }
         if (r.Action == ActionType.Expand)
         {
             bool expandFolders = r.Kind == ResultKind.Folder;
@@ -1268,6 +1274,7 @@ public partial class MainWindow : Window
                 : IsGrid ? "Space / Esc  닫기" : "Space / Esc  닫기      ↑↓  다른 항목 미리보기";
             return;
         }
+        if (_terminalOpen) { FooterText.Text = "↵  실행      Ctrl+C  중단      Esc  검색창으로      Esc 두 번  닫기"; return; }
         if (Selected is not { } item) { FooterText.Text = ""; return; }
         var r = item.Result;
         if (IsGrid)
@@ -1285,6 +1292,7 @@ public partial class MainWindow : Window
             ActionType.Paste => "붙여넣기",
             ActionType.SwitchWindow => "창으로 전환",
             ActionType.Kill => "종료 (두 번)",
+            ActionType.Terminal => "터미널에서 실행",
             _ => r.Kind switch
             {
                 ResultKind.App => "실행",
@@ -1300,6 +1308,147 @@ public partial class MainWindow : Window
         if (r.RevealPath is not null) parts.Add("Alt+↵  속성      우클릭  더 보기");
         parts.Add("Esc  닫기");
         FooterText.Text = string.Join("      ", parts);
+    }
+
+    // ---------- mini terminal ----------
+
+    bool _terminalOpen;
+    string _terminalDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    System.Diagnostics.Process? _terminalProcess;
+
+    void OpenTerminal(string command)
+    {
+        ClosePreview();
+        _terminalOpen = true;
+        Results.Visibility = AppGrid.Visibility = Visibility.Collapsed;
+        TerminalPanel.Visibility = Visibility.Visible;
+        Footer.Visibility = Visibility.Visible;
+        UpdateFooter();
+        ShowTerminalDir();
+        SyncCardWidth();
+        RunTerminal(command);
+        TerminalInput.Focus();
+        Keyboard.Focus(TerminalInput);
+    }
+
+    /// <summary>The current folder in front of the input line, like a shell prompt.</summary>
+    void ShowTerminalDir()
+    {
+        TerminalPrompt.Text = _terminalDir + ">";
+        TerminalPrompt.ToolTip = _terminalDir;
+    }
+
+    void CloseTerminal()
+    {
+        if (!_terminalOpen) return;
+        _terminalOpen = false;
+        StopTerminalProcess();
+        TerminalPanel.Visibility = Visibility.Collapsed;
+        TerminalOutput.Clear();
+        TerminalInput.Clear();
+        if (IsGrid) AppGrid.Visibility = Visibility.Visible;
+        else Results.Visibility = _items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        SyncCardWidth();
+        UpdateFooter();
+    }
+
+    void StopTerminalProcess()
+    {
+        var p = _terminalProcess;
+        _terminalProcess = null;
+        try { if (p is { HasExited: false }) p.Kill(entireProcessTree: true); }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+    }
+
+    void TerminalInput_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Escape: // back to the search box; the next Esc there closes the launcher
+                Query.Focus();
+                Keyboard.Focus(Query);
+                e.Handled = true; break;
+            case Key.Enter when TerminalInput.Text.Trim() is { Length: > 0 } command:
+                TerminalInput.Clear();
+                RunTerminal(command);
+                e.Handled = true; break;
+            case Key.C when Keyboard.Modifiers == ModifierKeys.Control && TerminalInput.SelectionLength == 0:
+                StopTerminalProcess();
+                e.Handled = true; break;
+        }
+    }
+
+    void TerminalWrite(string text)
+    {
+        const int Keep = 200_000;
+        TerminalOutput.AppendText(text);
+        if (TerminalOutput.Text.Length > Keep) TerminalOutput.Text = TerminalOutput.Text[^(Keep / 2)..];
+        TerminalOutput.ScrollToEnd();
+    }
+
+    /// <summary>
+    /// Runs one line through cmd.exe in the terminal's folder (<c>cd</c> moves it, <c>cls</c> clears). Input is closed,
+    /// so a program that waits for typing ends instead of hanging; Ctrl+C or closing the terminal kills it.
+    /// </summary>
+    void RunTerminal(string line)
+    {
+        StopTerminalProcess();
+        TerminalWrite($"{_terminalDir}> {line}\n");
+        var cd = System.Text.RegularExpressions.Regex.Match(line, @"^cd(?:\s+/d)?(?:\s+(.+))?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (cd.Success)
+        {
+            if (!cd.Groups[1].Success) TerminalWrite(_terminalDir + "\n");
+            else
+            {
+                string target;
+                try { target = Path.GetFullPath(Environment.ExpandEnvironmentVariables(cd.Groups[1].Value.Trim().Trim('"')), _terminalDir); }
+                catch (ArgumentException) { target = ""; }
+                if (Directory.Exists(target)) { _terminalDir = target; ShowTerminalDir(); }
+                else TerminalWrite("지정된 경로를 찾을 수 없습니다.\n");
+            }
+            return;
+        }
+        if (line.Equals("cls", StringComparison.OrdinalIgnoreCase)) { TerminalOutput.Clear(); return; }
+
+        // UTF-8 (code page 65001) rather than the OEM page: "tree" draws its lines with characters the Korean OEM page turns into "??".
+        var utf8 = new System.Text.UTF8Encoding(false);
+        var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe")
+        {
+            Arguments = "/d /s /c \"chcp 65001 >nul & " + line + "\"", WorkingDirectory = _terminalDir, UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            StandardOutputEncoding = utf8, StandardErrorEncoding = utf8,
+        };
+        try
+        {
+            var p = _terminalProcess = new System.Diagnostics.Process { StartInfo = psi };
+            // A command like "tree" on C:\ prints without end: past these limits the program is stopped, so neither the
+            // UI queue nor the text box can grow without bound. Counted on the reader threads, before anything is queued.
+            const int MaxLines = 3000, MaxChars = 100_000;
+            int lines = 0, chars = 0, stopped = 0;
+            void OnLine(object _, System.Diagnostics.DataReceivedEventArgs d)
+            {
+                if (d.Data is not { } text || Volatile.Read(ref stopped) == 1) return;
+                if (Interlocked.Increment(ref lines) > MaxLines | Interlocked.Add(ref chars, text.Length + 1) > MaxChars)
+                {
+                    if (Interlocked.Exchange(ref stopped, 1) == 0) // the first reader to pass the limit stops it, once
+                        Dispatcher.BeginInvoke(() =>
+                        {
+                            if (_terminalProcess != p) return;
+                            StopTerminalProcess();
+                            TerminalWrite($"\n출력이 너무 많아 중단했습니다 ({MaxLines:N0}줄 또는 {MaxChars:N0}자 초과). 범위를 좁혀 다시 실행하세요.\n");
+                        });
+                    return;
+                }
+                Dispatcher.BeginInvoke(() => { if (_terminalProcess == p) TerminalWrite(text + "\n"); });
+            }
+            p.OutputDataReceived += OnLine;
+            p.ErrorDataReceived += OnLine;
+            p.Start();
+            p.StandardInput.Close();
+            p.BeginOutputReadLine();
+            p.BeginErrorReadLine();
+        }
+        catch (Exception ex) { TerminalWrite(ex.Message + "\n"); }
     }
 
     // ---------- preview (hold Space) ----------

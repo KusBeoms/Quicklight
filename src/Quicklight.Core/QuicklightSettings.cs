@@ -95,6 +95,9 @@ public sealed class QuicklightSettings
     /// <summary>Check for a newer release shortly after start and every few hours; install it while the launcher is closed.</summary>
     public bool AutoUpdate { get; set; } = true;
 
+    /// <summary>Commands typed in the search box (a program on PATH, a cmd built-in) can run in a mini terminal inside the launcher.</summary>
+    public bool Terminal { get; set; }
+
     public bool LaunchAtStartup { get; set; } = true;
 
     /// <summary>"system", "dark" or "light".</summary>

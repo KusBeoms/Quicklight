@@ -25,6 +25,12 @@ public partial class App : Application
         base.OnStartup(e);
         bool showNow = e.Args.Contains("--show");
 
+        if (Installer.ShouldOffer(e.Args) && !Installer.OfferInstall())
+        {
+            Shutdown();
+            return;
+        }
+
         // Second launch: ask the running instance to show itself and leave. The event exists before the mutex
         // is taken, so a second launch can never find the mutex without the event.
         _showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
@@ -32,6 +38,8 @@ public partial class App : Application
         // Right after an update the previous version is still shutting down: wait for it instead of handing over.
         var updatedFrom = ArgAfter(e.Args, "--updated");
         if (!first && updatedFrom is not null) first = WaitForMutex(_mutex, TimeSpan.FromSeconds(20));
+        // Started from another folder while an older copy runs (e.g. a fresh install over a development install): replace it.
+        else if (!first && Installer.StopOtherInstalls()) first = WaitForMutex(_mutex, TimeSpan.FromSeconds(10));
         if (!first)
         {
             _showEvent.Set();
@@ -39,6 +47,7 @@ public partial class App : Application
             return;
         }
 
+        Installer.Register();
         DispatcherUnhandledException += (_, args) =>
         {
             Log.Error("unhandled UI exception", args.Exception);

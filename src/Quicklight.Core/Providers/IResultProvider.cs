@@ -35,6 +35,7 @@ public static class Scores
     public const double Snippet = 700;
     public const double Clipboard = 700;
     public const double Process = 650;
+    public const double Terminal = 500;
     public const double WindowBase = 90;
     public const double ExactPath = 900;
     public const double PathCompletion = 850;

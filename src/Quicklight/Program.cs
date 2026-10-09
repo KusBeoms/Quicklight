@@ -13,6 +13,10 @@ public static class Program
         // The one elevated step of the bundled Everything setup (started through UAC by the launcher).
         if (args.Contains("--install-everything")) return Quicklight.Core.Everything.EverythingBootstrap.InstallElevated();
 
+        if (args.Contains("--install")) return Installer.InstallElevated();
+        if (args.Contains("--uninstall")) return Installer.Uninstall();
+        if (args.Contains("--uninstall-elevated")) return Installer.UninstallElevated();
+
         var app = new App();
         app.InitializeComponent();
         return app.Run();

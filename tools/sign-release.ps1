@@ -39,4 +39,5 @@ $Version = $Version.TrimStart('v', 'V')
 $zip = Join-Path (Split-Path $Exe) "Quicklight_v$Version.zip"
 Get-ChildItem (Split-Path $Exe) -Filter 'Quicklight*.zip' | Remove-Item   # one release asset in dist at a time
 Compress-Archive -Path $Exe, $sig -DestinationPath $zip -CompressionLevel Optimal
+Remove-Item $sig   # only needed inside the zip
 Write-Host "Signed and packed: $zip"

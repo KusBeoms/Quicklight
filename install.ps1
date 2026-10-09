@@ -12,6 +12,7 @@ New-Item -ItemType Directory -Force $Target | Out-Null
 # Files from the older multi-file layout are no longer used.
 Get-ChildItem $Target -Exclude 'Quicklight.exe' -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
 Copy-Item $exe $Target -Force
+Remove-Item $exe   # dist keeps only the release zip; running this exe by hand would show the installer
 
 Start-Process (Join-Path $Target 'Quicklight.exe')
 Write-Host "Installed $Target\Quicklight.exe and started it. Press Alt+Space."

@@ -414,23 +414,49 @@
                     </Border>
                 </Grid>
 
+                <!-- Mini terminal (Enter on a command row): the output and an input line. Replaces the result list while open. -->
+                <Grid x:Name="TerminalPanel" Height="520" Margin="20,10,20,10" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <TextBox x:Name="TerminalOutput" IsReadOnly="True" Focusable="False" BorderThickness="0" Background="Transparent" Padding="4,4"
+                                 Foreground="{DynamicResource TextBrush}" FontFamily="Cascadia Mono, Consolas" FontSize="15"
+                                 TextWrapping="Wrap" VerticalScrollBarVisibility="Hidden" />
+                        <local:ScrollThumb x:Name="TerminalThumb" />
+                    </Grid>
+                    <Border Grid.Row="1" CornerRadius="12" Margin="0,8,0,0" Background="{DynamicResource GlyphBackBrush}">
+                        <DockPanel>
+                            <TextBlock x:Name="TerminalPrompt" DockPanel.Dock="Left" Text="&gt;" MaxWidth="320" TextTrimming="CharacterEllipsis" FontFamily="Cascadia Mono, Consolas" FontSize="15"
+                                       Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                            <TextBox x:Name="TerminalInput" BorderThickness="0" Background="Transparent" Padding="8,9"
+                                     Foreground="{DynamicResource TextBrush}" CaretBrush="{DynamicResource TextBrush}" SelectionBrush="{DynamicResource AccentBrush}"
+                                     FontFamily="Cascadia Mono, Consolas" FontSize="15" PreviewKeyDown="TerminalInput_PreviewKeyDown" />
+                        </DockPanel>
+                    </Border>
+                </Grid>
+
                 <!-- Every installed app, sorted and sectioned by initial ("앱", "app", "프로그램", ...). -->
-                <ListBox x:Name="AppGrid" ItemsSource="{Binding Source={StaticResource GroupedApps}}"
-                         ItemTemplate="{StaticResource TileTemplate}" ItemContainerStyle="{StaticResource TileStyle}"
-                         Template="{StaticResource GlassList}" Background="Transparent" BorderThickness="0" Padding="0,4,0,8" Height="540" Visibility="Collapsed"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Hidden"
-                         VirtualizingPanel.IsVirtualizing="False" Focusable="False" KeyboardNavigation.TabNavigation="None"
-                         PreviewMouseLeftButtonDown="List_PreviewMouseLeftButtonDown" PreviewMouseRightButtonUp="List_PreviewMouseRightButtonUp">
-                    <ListBox.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <!-- Nine 100-DIP tiles a row; AppCardWidth leaves 20 DIPs each side. -->
-                            <WrapPanel Width="900" HorizontalAlignment="Center" />
-                        </ItemsPanelTemplate>
-                    </ListBox.ItemsPanel>
-                    <ListBox.GroupStyle>
-                        <GroupStyle HeaderTemplate="{StaticResource GroupHeader}" />
-                    </ListBox.GroupStyle>
-                </ListBox>
+                <Grid>
+                    <ListBox x:Name="AppGrid" ItemsSource="{Binding Source={StaticResource GroupedApps}}"
+                             ItemTemplate="{StaticResource TileTemplate}" ItemContainerStyle="{StaticResource TileStyle}"
+                             Template="{StaticResource GlassList}" Background="Transparent" BorderThickness="0" Padding="0,4,0,8" Height="540" Visibility="Collapsed"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                             VirtualizingPanel.IsVirtualizing="False" Focusable="False" KeyboardNavigation.TabNavigation="None"
+                             PreviewMouseLeftButtonDown="List_PreviewMouseLeftButtonDown" PreviewMouseRightButtonUp="List_PreviewMouseRightButtonUp">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <!-- Nine 100-DIP tiles a row; AppCardWidth leaves 20 DIPs each side. -->
+                                <WrapPanel Width="900" HorizontalAlignment="Center" />
+                            </ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.GroupStyle>
+                            <GroupStyle HeaderTemplate="{StaticResource GroupHeader}" />
+                        </ListBox.GroupStyle>
+                    </ListBox>
+                    <local:ScrollThumb x:Name="AppGridThumb" />
+                </Grid>
 
                 <Border x:Name="Footer" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SeparatorBrush}" Padding="24,8" Visibility="Collapsed">
                     <TextBlock x:Name="FooterText" FontSize="11.5" Foreground="{DynamicResource SubtleTextBrush}" TextTrimming="CharacterEllipsis" />

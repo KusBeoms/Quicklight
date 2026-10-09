@@ -57,6 +57,7 @@ public partial class SettingsWindow : Window
         (s.Backdrop == "solid" ? BackdropSolid : BackdropAcrylic).IsChecked = true;
         LaunchAtStartup.IsChecked = s.LaunchAtStartup;
         AutoUpdate.IsChecked = s.AutoUpdate;
+        Terminal.IsChecked = s.Terminal;
         FileSearch.IsChecked = s.FileSearch;
         AdvancedSearch.IsChecked = s.AdvancedSearch;
         MaxResults.Text = s.MaxResults.ToString();
@@ -88,6 +89,7 @@ public partial class SettingsWindow : Window
         s.Backdrop = BackdropSolid.IsChecked == true ? "solid" : "acrylic";
         s.LaunchAtStartup = LaunchAtStartup.IsChecked == true;
         s.AutoUpdate = AutoUpdate.IsChecked == true;
+        s.Terminal = Terminal.IsChecked == true;
         s.FileSearch = FileSearch.IsChecked == true;
         s.AdvancedSearch = AdvancedSearch.IsChecked == true;
         s.MaxResults = Count(MaxResults.Text, s.MaxResults);

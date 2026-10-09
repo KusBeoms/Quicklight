@@ -61,6 +61,7 @@ public sealed class SearchEngine : IDisposable
             new SnippetProvider(settings),
             new CustomCommandProvider(settings),
             new ProcessProvider(),
+            new TerminalProvider(settings),
         ];
         if (includeWindows) _providers.Add(new WindowProvider());
         if (everything is not null) _providers.Add(new EverythingProvider(everything, settings));
@@ -215,7 +216,7 @@ public sealed class SearchEngine : IDisposable
 
     /// <summary>Answers and rows whose identity does not last (a window handle, a clipboard entry): no usage learning.</summary>
     static bool IsTransient(ResultKind k) =>
-        k is ResultKind.Calculator or ResultKind.Currency or ResultKind.WebSearch or ResultKind.Window or ResultKind.Clipboard or ResultKind.Process;
+        k is ResultKind.Calculator or ResultKind.Currency or ResultKind.WebSearch or ResultKind.Window or ResultKind.Clipboard or ResultKind.Process or ResultKind.Terminal;
 
     /// <summary>Runs Open/System actions. Copy actions are the caller's job (clipboard needs a UI thread).</summary>
     public static void Execute(SearchResult r)
@@ -243,7 +244,7 @@ public sealed class SearchEngine : IDisposable
             case ActionType.Kill:
                 ProcessProvider.Kill(r.Target);
                 break;
-            case ActionType.Copy or ActionType.Paste:
+            case ActionType.Copy or ActionType.Paste or ActionType.Terminal:
                 throw new InvalidOperationException("Copy and paste results are handled by the caller.");
             case ActionType.None:
                 break;

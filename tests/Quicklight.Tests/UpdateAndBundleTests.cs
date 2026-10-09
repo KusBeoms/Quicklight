@@ -258,15 +258,30 @@ public class UpdaterTests
     }
 
     [Theory]
-    [InlineData("update", true)]
-    [InlineData("업데이트", true)]
-    [InlineData(" Update ", true)]
+    [InlineData("-update", true)]
+    [InlineData("--update", true)]
+    [InlineData("-업데이트", true)]
+    [InlineData(" --Update ", true)]
+    [InlineData("update", false)] // needs the dash
+    [InlineData("업데이트", false)]
     [InlineData("windows update", false)] // that is the Windows settings page
     public async Task Update_row(string query, bool shown)
     {
         var engine = new SearchEngine(new QuicklightSettings(), new UsageStore(null), new AppProvider([]));
         var r = await engine.SearchAsync(query);
         Assert.Equal(shown, r[0].Action == ActionType.Update);
+    }
+
+    [Theory]
+    [InlineData("-version", true)]
+    [InlineData("--version", true)]
+    [InlineData("-버전", true)]
+    [InlineData("version", false)]
+    public async Task Version_row(string query, bool shown)
+    {
+        var engine = new SearchEngine(new QuicklightSettings(), new UsageStore(null), new AppProvider([]));
+        var r = await engine.SearchAsync(query);
+        Assert.Equal(shown, r.Count > 0 && r[0].Title.StartsWith("Quicklight v") && r[0].Action == ActionType.Copy);
     }
 
     sealed class StubHandler(byte[] body) : HttpMessageHandler

@@ -70,6 +70,7 @@ public sealed class ResultItem(SearchResult result, string group) : INotifyPrope
         ResultKind.Clipboard => "클립보드",
         ResultKind.Snippet => "스니펫",
         ResultKind.Process => "프로세스",
+        ResultKind.Terminal => "터미널",
         _ => k.ToString(),
     };
 
@@ -88,6 +89,7 @@ public sealed class ResultItem(SearchResult result, string group) : INotifyPrope
         ResultKind.Clipboard => "",
         ResultKind.Snippet => "",
         ResultKind.Process => "",
+        ResultKind.Terminal => "\uE756",
         ResultKind.Command => r.Target switch
         {
             "lock" => "",

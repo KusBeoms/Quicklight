@@ -179,3 +179,37 @@ public class RunningStateProviderTests
         Assert.Contains(results, r => r.Title.Equals(name, StringComparison.OrdinalIgnoreCase));
     }
 }
+
+public class TerminalProviderTests
+{
+    static Task<IReadOnlyList<SearchResult>> Query(string text, bool on = true) =>
+        new TerminalProvider(new QuicklightSettings { Terminal = on }).QueryAsync(new QueryContext(text), default);
+
+    [Fact]
+    public void Off_by_default() => Assert.False(new QuicklightSettings().Terminal);
+
+    [Theory]
+    [InlineData("ipconfig /all")]
+    [InlineData("dir")]
+    [InlineData("echo hi")]
+    public async Task Commands_become_a_terminal_row(string text)
+    {
+        var r = Assert.Single(await Query(text));
+        Assert.Equal(ActionType.Terminal, r.Action);
+        Assert.Equal(text, r.Target);
+    }
+
+    [Theory]
+    [InlineData("cmd ipconfig", "ipconfig")]
+    [InlineData("CMD  git status", "git status")]
+    public async Task Leading_cmd_is_dropped(string text, string command) => Assert.Equal(command, Assert.Single(await Query(text)).Target);
+
+    [Theory]
+    [InlineData("카카오톡")]
+    [InlineData("zzzznotacommand")]
+    [InlineData(@"C:\Windows\notepad.exe")]
+    public async Task Other_text_is_not_a_command(string text) => Assert.Empty(await Query(text));
+
+    [Fact]
+    public async Task Nothing_when_switched_off() => Assert.Empty(await Query("ipconfig /all", on: false));
+}

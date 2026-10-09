@@ -251,6 +251,12 @@
                 <TextBlock Text="검색" Style="{StaticResource Section}" />
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
+                        <CheckBox x:Name="Terminal">
+                            <StackPanel>
+                                <TextBlock Text="간이 터미널" />
+                                <TextBlock Text="명령어를 입력하고 Enter를 누르면 실행 결과와 입력창을 보여 줍니다" Style="{StaticResource Hint}" />
+                            </StackPanel>
+                        </CheckBox>
                         <CheckBox x:Name="FileSearch">
                             <StackPanel>
                                 <TextBlock Text="파일 검색" />

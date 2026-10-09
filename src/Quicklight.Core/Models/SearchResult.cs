@@ -16,6 +16,7 @@ public enum ResultKind
     Clipboard,
     Snippet,
     Process,
+    Terminal,
 }
 
 public enum ActionType
@@ -38,6 +39,8 @@ public enum ActionType
     SwitchWindow,
     /// <summary>End every process named <see cref="SearchResult.Target"/>.</summary>
     Kill,
+    /// <summary>Run <see cref="SearchResult.Target"/> in the launcher's mini terminal (handled by the launcher).</summary>
+    Terminal,
 }
 
 public sealed class SearchResult
