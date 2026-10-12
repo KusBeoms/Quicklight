@@ -52,8 +52,22 @@ public sealed class Updater(string repository, HttpMessageHandler? handler = nul
         if (!IsValidRepository(repository)) throw new UpdateException($"'{repository}' is not a GitHub repository (owner/name).");
         using var response = await _http.GetAsync($"https://api.github.com/repos/{repository}/releases/latest", ct).ConfigureAwait(false);
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null; // no release yet
-        if (!response.IsSuccessStatusCode) throw new UpdateException($"GitHub answered {(int)response.StatusCode}.");
+        if (!response.IsSuccessStatusCode) throw new UpdateException(FailureMessage(response));
         return ParseRelease(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+    }
+
+    /// <summary>GitHub's unauthenticated limit (60/hour per IP) answers 403/429 with X-RateLimit-Reset; say when to retry.</summary>
+    internal static string FailureMessage(HttpResponseMessage response)
+    {
+        var h = response.Headers;
+        if (response.StatusCode is System.Net.HttpStatusCode.Forbidden or System.Net.HttpStatusCode.TooManyRequests
+            && h.TryGetValues("X-RateLimit-Remaining", out var left) && left.FirstOrDefault() == "0"
+            && h.TryGetValues("X-RateLimit-Reset", out var reset) && long.TryParse(reset.FirstOrDefault(), out var at))
+        {
+            var minutes = Math.Max(1, (int)Math.Ceiling((DateTimeOffset.FromUnixTimeSeconds(at) - DateTimeOffset.UtcNow).TotalMinutes));
+            return $"GitHub 요청 한도를 넘었습니다. {minutes}분 이후 다시 시도하세요.";
+        }
+        return $"GitHub answered {(int)response.StatusCode}.";
     }
 
     internal static bool IsValidRepository(string repo) =>

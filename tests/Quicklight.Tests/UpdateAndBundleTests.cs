@@ -18,6 +18,16 @@ public class UpdaterTests
         """;
 
     [Fact]
+    public void Rate_limit_says_when_to_retry()
+    {
+        var r = new HttpResponseMessage(HttpStatusCode.Forbidden);
+        r.Headers.Add("X-RateLimit-Remaining", "0");
+        r.Headers.Add("X-RateLimit-Reset", DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds().ToString());
+        Assert.Contains("분 이후 다시 시도", Updater.FailureMessage(r));
+        Assert.Equal("GitHub answered 403.", Updater.FailureMessage(new HttpResponseMessage(HttpStatusCode.Forbidden)));
+    }
+
+    [Fact]
     public void Parses_the_latest_release()
     {
         var r = Updater.ParseRelease(Release)!;

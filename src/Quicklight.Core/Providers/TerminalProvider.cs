@@ -19,8 +19,11 @@ public sealed class TerminalProvider(QuicklightSettings settings) : IResultProvi
         // "cmd ipconfig": the word cmd only says "run this", the terminal is cmd already.
         bool prefixed = text.StartsWith("cmd ", StringComparison.OrdinalIgnoreCase) && text[4..].TrimStart() is { Length: > 0 };
         if (prefixed) text = text[4..].TrimStart();
-        if (!settings.Terminal || query.IsAlternate || !IsCommand(text)) return Task.FromResult<IReadOnlyList<SearchResult>>([]);
-        bool hasArgs = prefixed || text.Contains(' ');
+        // "> dir": a leading > says it is a command, whatever the first word is.
+        bool forced = text.StartsWith('>');
+        if (forced) text = text[1..].TrimStart();
+        if (!settings.Terminal || query.IsAlternate || text.Length == 0 || !(forced || IsCommand(text))) return Task.FromResult<IReadOnlyList<SearchResult>>([]);
+        bool hasArgs = prefixed || forced || text.Contains(' ');
         return Task.FromResult<IReadOnlyList<SearchResult>>([new SearchResult
         {
             Title = text,

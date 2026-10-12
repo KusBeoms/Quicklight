@@ -109,7 +109,7 @@ Windows용 Spotlight 스타일 런처입니다. **Alt+Space** 를 누르면 화�
 | `commands` | 없음 | `[{ "name": "빌드", "path": "C:\\tools\\build.cmd", "arguments": "--release", "aliases": ["build"] }]` |
 | `advancedSearch` | `true` | 아래 결과 수와 경로 규칙(`maxResults`, `maxFileResults`, `maxFolderResults`, `demotedPaths`, `excludedPaths`)을 씀. `false` 면 기본값으로 검색하고 적어 둔 값은 그대로 남음 (설정 창의 "상세 설정") |
 | `maxResults` | 12 | 표시할 최대 결과 수 |
-| `terminal` | false | 간이 터미널 (설정 창의 "간이 터미널"). 켜면 `git status`, `ipconfig /all`, `dir` 처럼 PATH의 프로그램이나 cmd 내장 명령으로 시작하는 입력에 "터미널" 결과가 나옴. Enter를 누르면 결과 목록 자리에 실행 결과와 입력창이 열리고, 입력창 앞에 현재 폴더가 표시됨. 입력창에서 Enter로 다음 명령 실행(`cd` 로 폴더 이동, `cls` 로 지우기, Ctrl+C 로 실행 중단), Esc로 검색창으로 돌아가고 한 번 더 누르면 닫기. 입력이 필요한 프로그램은 쓸 수 없음. 한 번 실행의 출력이 3,000줄 또는 10만 자를 넘으면 실행을 중단하고 안내 문구를 표시 |
+| `terminal` | false | 간이 터미널 (설정 창의 "간이 터미널"). 켜면 `git status`, `ipconfig /all`, `dir` 처럼 PATH의 프로그램이나 cmd 내장 명령으로 시작하는 입력에 "터미널" 결과가 나옴. `> 명령어` 처럼 `>` 로 시작하면 첫 단어가 무엇이든 바로 터미널 명령으로 인식. Enter를 누르면 결과 목록 자리에 실행 결과와 입력창이 열리고, 입력창 앞에 현재 폴더가 표시됨. 입력창에서 Enter로 다음 명령 실행(`cd` 로 폴더 이동, `cls` 로 지우기, Ctrl+C 로 실행 중단), Esc로 검색창으로 돌아가고 한 번 더 누르면 닫기. 입력이 필요한 프로그램은 쓸 수 없음. 한 번 실행의 출력이 3,000줄 또는 10만 자를 넘으면 실행을 중단하고 안내 문구를 표시 |
 | `fileSearch` | true | Everything 파일 검색 |
 | `maxFileResults` | 6 | 결과 중 파일의 최대 수 |
 | `maxFolderResults` | 4 | 결과 중 폴더의 최대 수. 이름이 맞는 폴더는 앱이나 파일이 많아도 3자리까지 보장 |

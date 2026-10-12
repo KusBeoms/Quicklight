@@ -188,6 +188,15 @@ public class TerminalProviderTests
     [Fact]
     public void Off_by_default() => Assert.False(new QuicklightSettings().Terminal);
 
+    [Fact]
+    public async Task Greater_than_forces_a_command()
+    {
+        var r = Assert.Single(await Query("> zzznotaprogram -x"));
+        Assert.Equal("zzznotaprogram -x", r.Target);
+        Assert.Empty(await Query(">  "));
+        Assert.Empty(await Query("> dir", on: false));
+    }
+
     [Theory]
     [InlineData("ipconfig /all")]
     [InlineData("dir")]
