@@ -128,9 +128,15 @@ public partial class MainWindow : Window
     public void InitializeHidden()
     {
         Handle = new WindowInteropHelper(this).EnsureHandle();
+        MakeTransparent();
+        ApplyBackdrop();
+    }
+
+    /// <summary>Also done on every show: a display or GPU reset, sleep or a remote session change drops the DWM frame extension and the window turns solid black.</summary>
+    void MakeTransparent()
+    {
         HwndSource.FromHwnd(Handle).CompositionTarget.BackgroundColor = Colors.Transparent;
         NativeUi.MakeGpuTransparent(Handle);
-        ApplyBackdrop();
     }
 
     /// <summary>"acrylic" = blurred snapshot of what is behind the window; "solid" = opaque panel.</summary>
@@ -174,6 +180,7 @@ public partial class MainWindow : Window
         _hiding = false; // shown again mid fade-out: removing the fade above means its Completed never fires
         NativeUi.Move(Handle, x, y);
         Height = (work.Bottom - y) / scale;
+        MakeTransparent();
         Show();
         Activate();
         if (!NativeUi.ForceForeground(Handle))
