@@ -168,7 +168,11 @@ public partial class MainWindow : Window
         int margin = (int)(ShadowMargin * scale);
         int y = panelTop - margin;
 
-        if (!IsVisible) _previousForeground = NativeUi.Foreground();
+        if (!IsVisible)
+        {
+            _previousForeground = NativeUi.Foreground();
+            Status.Text = ""; // a one-off message (e.g. a launch error) must not outlive the opening it was shown in
+        }
 
         // Snapshot the screen under the panel before the window covers it (skipped when still fading out: it would capture itself).
         if (!IsVisible && Backdrop.Visibility == Visibility.Visible)
