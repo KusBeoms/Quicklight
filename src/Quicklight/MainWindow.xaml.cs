@@ -10,6 +10,7 @@ using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using Quicklight.Core;
 using Quicklight.Core.Activity;
+using Quicklight.Core.Ai;
 using Quicklight.Core.Everything;
 using Quicklight.Core.Matching;
 using Quicklight.Core.Models;
@@ -71,6 +72,7 @@ public partial class MainWindow : Window
         _updates = updates;
         InitializeComponent();
         TerminalThumb.Attach(TerminalOutput);
+        AiThumb.Attach(AiOutput);
         AppGridThumb.Attach(AppGrid);
         ((CollectionViewSource)Resources["GroupedResults"]).Source = _items;
         ((CollectionViewSource)Resources["GroupedApps"]).Source = _apps;
@@ -225,6 +227,7 @@ public partial class MainWindow : Window
         CancelHold();
         ClosePreview();
         CloseTerminal();
+        CloseAi();
         if (ActiveList.ContextMenu is { IsOpen: true } menu) menu.IsOpen = false;
         AnimateOut(() =>
         {
@@ -370,7 +373,7 @@ public partial class MainWindow : Window
     /// <summary>On the app screen the card widens (and, through the taller grid, grows) to show more apps.</summary>
     void SyncCardWidth()
     {
-        double w = AppGrid.Visibility == Visibility.Visible || _terminalOpen ? AppCardWidth : _clipMode ? ClipCardWidth : PillWidth;
+        double w = AppGrid.Visibility == Visibility.Visible || _terminalOpen || _aiOpen ? AppCardWidth : _clipMode ? ClipCardWidth : PillWidth;
         if (!IsVisible) { ListSurface.BeginAnimation(WidthProperty, null); ListSurface.Width = w; return; }
         ListSurface.BeginAnimation(WidthProperty, Anim(null, w, 260, new CubicEase { EasingMode = EasingMode.EaseOut }));
     }
@@ -416,6 +419,7 @@ public partial class MainWindow : Window
         Disarm();
         ClosePreview();
         CloseTerminal();
+        CloseAi();
         if (AppCatalog.IsCatalogQuery(Query.Text))
         {
             _cts?.Cancel();
@@ -516,11 +520,12 @@ public partial class MainWindow : Window
         if (_armedKey is not null && !ordered.Exists(i => i.Result.Key == _armedKey)) _armedKey = null;
 
         if (ordered.Exists(i => i.Result.Action == ActionType.Update)) _ = CheckForUpdateAsync();
+        if (ordered.Exists(i => i.Result.Action == ActionType.AskAi)) _ = _ai.WarmUpAsync().ContinueWith(t => { if (t.IsFaulted) Log.Error("ai warm-up failed", t.Exception!.GetBaseException()); }); // a question is coming: load the model now
 
         bool any = _items.Count > 0;
         SetClipMode(any && ordered.TrueForAll(i => i.Result.Kind == ResultKind.Clipboard));
         Results.Visibility = Footer.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
-        if (_previewOpen || _terminalOpen) Results.Visibility = Visibility.Collapsed; // a later file stage while the preview or terminal is open
+        if (_previewOpen || _terminalOpen || _aiOpen) Results.Visibility = Visibility.Collapsed; // a later file stage while the preview or terminal is open
         if (!any) return;
         int index = selectedKey is null ? 0 : Math.Max(0, ordered.FindIndex(i => i.Result.Key == selectedKey));
         Select(index, disarm: false);
@@ -776,7 +781,7 @@ public partial class MainWindow : Window
                 if (Selected is { } item) Execute(item);
                 e.Handled = true; break;
             case Key.Escape:
-                if (_terminalOpen) HideLauncher(); // the first Esc (in the terminal input) already moved here; this one closes
+                if (_terminalOpen || _aiOpen) HideLauncher(); // the first Esc (in the terminal or AI input) already moved here; this one closes
                 else if (_updateBusy && _updateCts is { IsCancellationRequested: false } updating) updating.Cancel(); // "Esc로 취소"
                 else if (_armedKey is not null) Disarm();
                 else if (_typeAhead.Length > 0) ClearTypeAhead();
@@ -1073,6 +1078,7 @@ public partial class MainWindow : Window
         var r = item.Result;
         if (r.Action == ActionType.None) return; // informational row
         if (r.Action == ActionType.Update) { _ = RunUpdateAsync(); return; }
+        if (r.Action == ActionType.AskAi) { _recent.Add(Query.Text); OpenAi(r.Target); return; }
         if (r.Action == ActionType.Terminal) { _recent.Add(Query.Text); OpenTerminal(r.Target); return; }
         if (r.Action == ActionType.Expand)
         {
@@ -1285,6 +1291,7 @@ public partial class MainWindow : Window
                 : IsGrid ? "Space / Esc  닫기" : "Space / Esc  닫기      ↑↓  다른 항목 미리보기";
             return;
         }
+        if (_aiOpen) { FooterText.Text = "↵  보내기      Esc  검색창으로      Esc 두 번  닫기"; return; }
         if (_terminalOpen) { FooterText.Text = "↵  실행      Ctrl+C  중단      Esc  검색창으로      Esc 두 번  닫기"; return; }
         if (Selected is not { } item) { FooterText.Text = ""; return; }
         var r = item.Result;
@@ -1304,6 +1311,7 @@ public partial class MainWindow : Window
             ActionType.SwitchWindow => "창으로 전환",
             ActionType.Kill => "종료 (두 번)",
             ActionType.Terminal => "터미널에서 실행",
+            ActionType.AskAi => "AI에게 묻기",
             _ => r.Kind switch
             {
                 ResultKind.App => "실행",
@@ -1322,6 +1330,98 @@ public partial class MainWindow : Window
     }
 
     // ---------- mini terminal ----------
+
+    // ---------- local AI chat ----------
+
+    readonly AiSession _ai = new();
+    bool _aiOpen, _aiBusy;
+    bool _aiNew; // the next question starts a new conversation
+    CancellationTokenSource? _aiCts;
+
+    void OpenAi(string question)
+    {
+        ClosePreview();
+        CloseTerminal();
+        _aiOpen = true;
+        _aiNew = true;
+        Results.Visibility = AppGrid.Visibility = Visibility.Collapsed;
+        AiPanel.Visibility = Visibility.Visible;
+        Footer.Visibility = Visibility.Visible;
+        UpdateFooter();
+        SyncCardWidth();
+        AiInput.Focus();
+        Keyboard.Focus(AiInput);
+        _ = AskAiAsync(question);
+    }
+
+    void CloseAi()
+    {
+        if (!_aiOpen) return;
+        _aiOpen = _aiBusy = false;
+        _aiCts?.Cancel();
+        _aiCts = null;
+        AiPanel.Visibility = Visibility.Collapsed;
+        AiOutput.Clear();
+        AiInput.Clear();
+        AiInput.IsReadOnly = false;
+        AiBusy.Visibility = Visibility.Collapsed;
+        if (IsGrid) AppGrid.Visibility = Visibility.Visible;
+        else Results.Visibility = _items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        SyncCardWidth();
+        UpdateFooter();
+    }
+
+    void AiWrite(string text)
+    {
+        AiOutput.AppendText(text);
+        AiOutput.ScrollToEnd();
+    }
+
+    async Task AskAiAsync(string text)
+    {
+        if (_aiBusy) return;
+        var cts = _aiCts = new CancellationTokenSource();
+        _aiBusy = true;
+        AiInput.IsReadOnly = true;
+        AiBusy.Visibility = Visibility.Visible;
+        AiWrite($"나> {text}\n");
+        try
+        {
+            var answer = await _ai.AskAsync(text, _aiNew, cts.Token);
+            _aiNew = false;
+            AiWrite($"AI> {answer}\n\n");
+        }
+        catch (OperationCanceledException) { return; } // closed meanwhile
+        catch (Exception ex)
+        {
+            Log.Error("ai failed", ex);
+            AiWrite($"[오류] {ex.Message}\n\n");
+        }
+        finally
+        {
+            if (_aiCts == cts)
+            {
+                _aiBusy = false;
+                AiInput.IsReadOnly = false;
+                AiBusy.Visibility = Visibility.Collapsed;
+            }
+        }
+    }
+
+    void AiInput_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Escape: // back to the search box; the next Esc there closes the launcher
+                Query.Focus();
+                Keyboard.Focus(Query);
+                e.Handled = true; break;
+            case Key.Enter when AiInput.Text.Trim() is { Length: > 0 } text && !_aiBusy:
+                AiInput.Clear();
+                _ = AskAiAsync(text);
+                e.Handled = true; break;
+        }
+    }
 
     bool _terminalOpen;
     string _terminalDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);

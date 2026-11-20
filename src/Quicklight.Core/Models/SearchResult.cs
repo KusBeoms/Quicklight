@@ -41,6 +41,8 @@ public enum ActionType
     Kill,
     /// <summary>Run <see cref="SearchResult.Target"/> in the launcher's mini terminal (handled by the launcher).</summary>
     Terminal,
+    /// <summary>Ask the AI assistant the question in <see cref="SearchResult.Target"/> (handled by the launcher).</summary>
+    AskAi,
 }
 
 public sealed class SearchResult

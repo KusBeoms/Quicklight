@@ -208,7 +208,7 @@
         </DataTemplate>
 
         <DataTemplate x:Key="GroupHeader">
-            <TextBlock Text="{Binding Name}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource HeaderBrush}" Margin="22,8,0,3" />
+            <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource HeaderBrush}" Margin="22,8,0,3" />
         </DataTemplate>
 
         <!-- Background work (translation install, model download, update download, indexing) as a thin bar. -->
@@ -350,7 +350,7 @@
                             </Rectangle.RenderTransform>
                         </Rectangle>
                     </Canvas>
-                    <TextBlock Grid.Column="2" x:Name="Status" FontSize="11.5" Foreground="{DynamicResource SubtleTextBrush}"
+                    <TextBlock Grid.Column="2" x:Name="Status" FontSize="13" Foreground="{DynamicResource SubtleTextBrush}"
                                VerticalAlignment="Center" Margin="12,0,0,0" />
                 </Grid>
 
@@ -437,6 +437,28 @@
                     </Border>
                 </Grid>
 
+                <!-- Chat with the local AI (Enter on an "AI에게 묻기" row): the conversation and an input line. Replaces the result list while open. -->
+                <Grid x:Name="AiPanel" Height="520" Margin="20,10,20,10" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <TextBox x:Name="AiOutput" IsReadOnly="True" Focusable="False" BorderThickness="0" Background="Transparent" Padding="4,4"
+                                 Foreground="{DynamicResource TextBrush}" FontSize="16" TextWrapping="Wrap" VerticalScrollBarVisibility="Hidden" />
+                        <local:ScrollThumb x:Name="AiThumb" />
+                    </Grid>
+                    <Border Grid.Row="1" CornerRadius="12" Margin="0,8,0,0" Background="{DynamicResource GlyphBackBrush}">
+                        <Grid>
+                            <TextBox x:Name="AiInput" BorderThickness="0" Background="Transparent" Padding="14,10"
+                                     Foreground="{DynamicResource TextBrush}" CaretBrush="{DynamicResource TextBrush}" SelectionBrush="{DynamicResource AccentBrush}"
+                                     FontSize="16" PreviewKeyDown="AiInput_PreviewKeyDown" />
+                            <TextBlock x:Name="AiBusy" Text="생각하는 중…" FontSize="16" Margin="14,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                                       Foreground="{DynamicResource PlaceholderBrush}" Visibility="Collapsed" />
+                        </Grid>
+                    </Border>
+                </Grid>
+
                 <!-- Every installed app, sorted and sectioned by initial ("앱", "app", "프로그램", ...). -->
                 <Grid>
                     <ListBox x:Name="AppGrid" ItemsSource="{Binding Source={StaticResource GroupedApps}}"
@@ -459,7 +481,7 @@
                 </Grid>
 
                 <Border x:Name="Footer" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SeparatorBrush}" Padding="24,8" Visibility="Collapsed">
-                    <TextBlock x:Name="FooterText" FontSize="11.5" Foreground="{DynamicResource SubtleTextBrush}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="FooterText" FontSize="13" Foreground="{DynamicResource SubtleTextBrush}" TextTrimming="CharacterEllipsis" />
                 </Border>
 
                     </StackPanel>

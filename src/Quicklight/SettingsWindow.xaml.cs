@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using Quicklight.Core;
+using Quicklight.Core.Ai;
 
 namespace Quicklight;
 
@@ -39,7 +40,8 @@ public partial class SettingsWindow : Window
         _apply = apply;
         InitializeComponent();
         SourceInitialized += (_, _) => NativeUi.SetDarkTitleBar(new WindowInteropHelper(this).Handle, Theme.IsDark);
-        Closed += (_, _) => _open = null;
+        Closed += (_, _) => { _open = null; _aiCts?.Cancel(); };
+        RefreshAi();
         Fill(s);
         Snippets.ItemsSource = _snippets = new(s.Snippets.Select(p => new Row { A = p.Key, B = p.Value }));
         Commands.ItemsSource = _commands = new(s.Commands.Select(c => new Row
@@ -131,6 +133,62 @@ public partial class SettingsWindow : Window
             if (r.A.Trim() is { Length: > 0 } key && r.B.Trim().Length > 0)
                 map[key] = trimValue ? r.B.Trim() : r.B.Replace("\r\n", "\n");
         return map;
+    }
+
+    // ---------- AI ----------
+
+    CancellationTokenSource? _aiCts; // a download is running
+
+    void RefreshAi()
+    {
+        bool ram = AiModel.HasEnoughRam, installed = AiModel.IsInstalled, busy = _aiCts is not null;
+        AiStatus.Text = !ram ? $"RAM {AiModel.RamBytes / (1L << 30)}GB: AI는 RAM 64GB 이상에서만 쓸 수 있습니다"
+            : installed ? "사용 가능. 질문을 입력하면 'AI에게 묻기'가 나옵니다" : "모델을 내려받으면 사용할 수 있습니다";
+        AiHint.Text = ram ? $"{AiModel.Repository} (약 6GB)와 llama.cpp 를 내려받아 이 PC 안에서만 실행합니다. 사용하지 않으면 10분 뒤 메모리에서 내립니다."
+            : "MCP 서버(Quicklight.exe --mcp)는 RAM과 관계없이 사용할 수 있습니다.";
+        AiDownload.Visibility = ram && !installed ? Visibility.Visible : Visibility.Collapsed;
+        AiDownload.Content = busy ? "취소" : "다운로드";
+        AiDelete.Visibility = installed && !busy ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    async void AiDownload_Click(object sender, RoutedEventArgs e)
+    {
+        if (_aiCts is { } running) { running.Cancel(); return; }
+        var cts = _aiCts = new CancellationTokenSource();
+        AiProgress.Visibility = Visibility.Visible;
+        AiProgress.IsIndeterminate = true;
+        RefreshAi();
+        var progress = new Progress<(string Label, double? Fraction)>(p =>
+        {
+            AiStatus.Text = p.Label;
+            AiProgress.IsIndeterminate = p.Fraction is null;
+            if (p.Fraction is { } f) AiProgress.Value = f;
+        });
+        try { await AiModel.InstallAsync(progress, cts.Token); }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Log.Error("ai download failed", ex);
+            MessageBox.Show(this, "내려받지 못했습니다. 다시 시도하면 이어서 받습니다.\n" + ex.Message, "Quicklight", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            _aiCts = null;
+            AiProgress.Visibility = Visibility.Collapsed;
+            RefreshAi();
+        }
+    }
+
+    void AiDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(this, "내려받은 AI 모델과 실행 파일을 지울까요?", "Quicklight", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        try { AiModel.Delete(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error("ai delete failed", ex);
+            MessageBox.Show(this, "지우지 못했습니다. AI가 켜져 있으면 10분 뒤나 Quicklight 를 껐다 켠 뒤 다시 시도하세요.\n" + ex.Message, "Quicklight", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        RefreshAi();
     }
 
     void Cancel_Click(object sender, RoutedEventArgs e) => Close();

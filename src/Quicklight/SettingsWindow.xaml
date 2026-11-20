@@ -305,6 +305,19 @@
                     </StackPanel>
                 </Border>
 
+                <TextBlock Text="AI" Style="{StaticResource Section}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel Margin="0,6">
+                        <TextBlock x:Name="AiStatus" TextWrapping="Wrap" />
+                        <TextBlock x:Name="AiHint" Style="{StaticResource Hint}" />
+                        <ProgressBar x:Name="AiProgress" Height="6" Minimum="0" Maximum="1" Margin="0,8,0,0" Visibility="Collapsed" />
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <Button x:Name="AiDownload" Content="다운로드" Style="{StaticResource Add}" Click="AiDownload_Click" Margin="0,4,8,0" />
+                            <Button x:Name="AiDelete" Content="삭제" Style="{StaticResource Add}" Click="AiDelete_Click" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
                 <TextBlock Text="웹 검색" Style="{StaticResource Section}" />
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
