@@ -19,8 +19,29 @@ internal static class NativeUi
         return (info.rcWork, scale, hz);
     }
 
+    /// <summary>Work area (physical pixels) and DPI scale of the monitor containing the point (physical pixels).</summary>
+    public static (RECT Work, double Scale) MonitorAt(int x, int y)
+    {
+        var mon = MonitorFromPoint(new POINT { X = x, Y = y }, 2 /* MONITOR_DEFAULTTONEAREST */);
+        var info = new MONITORINFOEX { cbSize = Marshal.SizeOf<MONITORINFOEX>() };
+        GetMonitorInfo(mon, ref info);
+        double scale = GetDpiForMonitor(mon, 0, out uint dpiX, out _) == 0 ? dpiX / 96.0 : 1.0;
+        return (info.rcWork, scale);
+    }
+
     public static void Move(IntPtr hwnd, int x, int y) =>
         SetWindowPos(hwnd, IntPtr.Zero, x, y, 0, 0, 0x0001 /* NOSIZE */ | 0x0004 /* NOZORDER */ | 0x0010 /* NOACTIVATE */);
+
+    /// <summary>Moves and sizes a window in physical pixels without activating it.</summary>
+    public static void SetBounds(IntPtr hwnd, int x, int y, int w, int h) =>
+        SetWindowPos(hwnd, IntPtr.Zero, x, y, w, h, 0x0004 /* NOZORDER */ | 0x0010 /* NOACTIVATE */);
+
+    /// <summary>The window's outer rectangle in physical pixels.</summary>
+    public static RECT Bounds(IntPtr hwnd)
+    {
+        GetWindowRect(hwnd, out var r);
+        return r;
+    }
 
     public static bool IsForeground(IntPtr hwnd) => GetForegroundWindow() == hwnd;
 
@@ -124,6 +145,7 @@ internal static class NativeUi
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool EnumDisplaySettings(string device, int mode, ref DEVMODE devMode);
     [DllImport("shcore.dll")] static extern int GetDpiForMonitor(IntPtr mon, int type, out uint x, out uint y);
     [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr hwnd);

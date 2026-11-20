@@ -54,7 +54,7 @@
                              soft coloured light caught inside the rims, and a bright edge where light hits. -->
                         <Grid x:Name="Glass" Visibility="Hidden" RenderTransformOrigin="0.5,0.5">
                             <Grid.Effect>
-                                <DropShadowEffect BlurRadius="24" ShadowDepth="6" Direction="270" Opacity="0.15" />
+                                <DropShadowEffect BlurRadius="16" ShadowDepth="3" Direction="270" Opacity="0.12" />
                             </Grid.Effect>
                             <Border x:Name="GlassLens" CornerRadius="12" />
                             <Border CornerRadius="12" Background="{DynamicResource GlassFillBrush}" />
@@ -62,10 +62,10 @@
                                 <Border CornerRadius="12" BorderThickness="7" Margin="-3">
                                     <Border.BorderBrush>
                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#40C3DAFF" Offset="0" />
-                                            <GradientStop Color="#1899C0FF" Offset="0.35" />
-                                            <GradientStop Color="#00FFFFFF" Offset="0.55" />
-                                            <GradientStop Color="#28E5FDBE" Offset="1" />
+                                            <GradientStop Color="#24E1EAFF" Offset="0" />
+                                            <GradientStop Color="#10B6CAEB" Offset="0.35" />
+                                            <GradientStop Color="#00FFFFFF" Offset="0.65" />
+                                            <GradientStop Color="#1CE1EAFF" Offset="1" />
                                         </LinearGradientBrush>
                                     </Border.BorderBrush>
                                     <Border.Effect>
@@ -76,10 +76,10 @@
                             <Border CornerRadius="12" BorderThickness="1">
                                 <Border.BorderBrush>
                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                        <GradientStop Color="#D0FFFFFF" Offset="0" />
+                                        <GradientStop Color="#78FFFFFF" Offset="0" />
                                         <GradientStop Color="#18FFFFFF" Offset="0.45" />
                                         <GradientStop Color="#18FFFFFF" Offset="0.7" />
-                                        <GradientStop Color="#70FFFFFF" Offset="1" />
+                                        <GradientStop Color="#48FFFFFF" Offset="1" />
                                     </LinearGradientBrush>
                                 </Border.BorderBrush>
                             </Border>
@@ -117,27 +117,20 @@
         </DataTemplate>
 
         <DataTemplate x:Key="ResultTemplate">
-            <Grid Height="38">
+            <Grid Height="46">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="32" />
+                    <ColumnDefinition Width="40" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource IconTemplate}" Width="30" Height="30" VerticalAlignment="Center" />
+                <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource IconTemplate}" Width="36" Height="36" VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="FontSize" Value="14.5" />
-                                <Style.Triggers>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                    <TextBlock Text="{Binding Subtitle}" FontSize="11.5" Opacity="0.68" TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
+                    <TextBlock Text="{Binding Title}" FontSize="16" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Subtitle}" FontSize="13" Foreground="{DynamicResource SubtleTextBrush}"
+                               TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock x:Name="Hint" Text="↵" FontSize="14" Opacity="0" VerticalAlignment="Center" Margin="0,0,4,0" />
+                    <TextBlock x:Name="Hint" Text="↵" FontSize="16" Opacity="0" VerticalAlignment="Center" Margin="0,0,4,0" />
                     <!-- Hold Space for a preview. -->
                     <TextBlock x:Name="Chevron" Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="11" Opacity="0.5"
                                VerticalAlignment="Center" Margin="4,0,2,0" Visibility="Collapsed" />
@@ -161,13 +154,13 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource IconTemplate}" Width="36" Height="36" VerticalAlignment="Top" Margin="0,4,0,0" />
+                <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource IconTemplate}" Width="44" Height="44" VerticalAlignment="Top" Margin="0,4,0,0" />
                 <StackPanel Grid.Column="1" Margin="16,0,12,0">
                     <TextBlock Text="{Binding Title}" FontSize="{Binding HeroFontSize}" FontWeight="SemiBold" TextWrapping="Wrap"
                                TextTrimming="CharacterEllipsis" MaxHeight="190" LineStackingStrategy="MaxHeight" />
-                    <TextBlock Text="{Binding Subtitle}" FontSize="12.5" Opacity="0.72" TextWrapping="Wrap" Margin="0,6,0,0" />
+                    <TextBlock Text="{Binding Subtitle}" FontSize="14" Foreground="{DynamicResource SubtleTextBrush}" TextWrapping="Wrap" Margin="0,6,0,0" />
                 </StackPanel>
-                <TextBlock Grid.Column="2" Text="{Binding HeroHint}" FontSize="12" Opacity="0.8" VerticalAlignment="Top" Margin="0,8,4,0" />
+                <TextBlock Grid.Column="2" Text="{Binding HeroHint}" FontSize="13" Foreground="{DynamicResource SubtleTextBrush}" VerticalAlignment="Top" Margin="0,8,4,0" />
             </Grid>
         </DataTemplate>
 
@@ -179,9 +172,9 @@
                 <Image x:Name="Picture" Source="{Binding Icon}" Visibility="Collapsed" MaxHeight="120" MaxWidth="360" Stretch="Uniform"
                        HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="HighQuality" />
                 <Grid Margin="0,6,0,0">
-                    <TextBlock Text="{Binding Subtitle}" FontSize="11.5" Opacity="0.68" />
+                    <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="{DynamicResource SubtleTextBrush}" />
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,-2,0,0">
-                        <TextBlock x:Name="Hint" Text="↵" FontSize="14" Opacity="0" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <TextBlock x:Name="Hint" Text="↵" FontSize="16" Opacity="0" VerticalAlignment="Center" Margin="0,0,4,0" />
                         <TextBlock Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="11" Opacity="0.5" VerticalAlignment="Center" Margin="4,0,2,0" />
                     </StackPanel>
                 </Grid>
@@ -311,11 +304,11 @@
          blurred backdrop, tint and outline. The margin leaves room for the drop shadow. Opacity is animated on show
          and hide; the blur only on the content, so the outlines stay crisp. -->
     <StackPanel x:Name="Shell" Margin="24" VerticalAlignment="Top">
-        <Grid Height="62" Width="720">
-            <Border CornerRadius="31" Background="{DynamicResource SolidPanelBrush}" Effect="{StaticResource SurfaceShadow}" />
+        <Grid x:Name="BarGrid" MinHeight="88" Width="720" SizeChanged="BarGrid_SizeChanged">
+            <Border x:Name="BarShape" CornerRadius="44" Background="{DynamicResource SolidPanelBrush}" Effect="{StaticResource SurfaceShadow}" />
             <Grid x:Name="BarPanel">
                 <Grid.Clip>
-                    <RectangleGeometry Rect="0,0,720,62" RadiusX="31" RadiusY="31" />
+                    <RectangleGeometry x:Name="BarClip" Rect="0,0,720,88" RadiusX="44" RadiusY="44" />
                 </Grid.Clip>
                 <!-- A blurred snapshot of the screen behind the window: acrylic that works with any corner radius.
                      Blurred once when captured (no live effect, so animation frames stay cheap), drawn scaled up.
@@ -323,28 +316,34 @@
                 <Canvas IsHitTestVisible="False">
                     <Image x:Name="Backdrop" Stretch="None" RenderOptions.BitmapScalingMode="Linear" />
                 </Canvas>
-                <Border x:Name="Tint" Background="{DynamicResource PanelBrush}" />
-                <Grid x:Name="Bar" Margin="24,0,22,0">
+                <Border x:Name="Tint" Background="{DynamicResource BarTintBrush}" />
+                <Grid x:Name="Bar" Margin="30,14,28,14">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="20" Opacity="0.7"
-                               Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,14,0" />
-                    <TextBlock Grid.Column="1" x:Name="Placeholder" Text="Quicklight 검색" FontSize="22" IsHitTestVisible="False"
+                    <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="25" Opacity="0.7"
+                               Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,16,0" />
+                    <TextBlock Grid.Column="1" x:Name="Placeholder" Text="묻거나 검색" FontSize="26" IsHitTestVisible="False"
                                Foreground="{DynamicResource PlaceholderBrush}" VerticalAlignment="Center" Margin="2,0,0,0" />
-                    <TextBox Grid.Column="1" x:Name="Query" FontSize="22" BorderThickness="0" Background="Transparent"
+                    <TextBox Grid.Column="1" x:Name="Query" AutomationProperties.Name="검색 또는 질문" FontSize="26" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" MaxHeight="150" VerticalScrollBarVisibility="Hidden"
                              Foreground="{DynamicResource TextBrush}" CaretBrush="Transparent"
                              SelectionBrush="{DynamicResource AccentBrush}" VerticalAlignment="Center"
                              TextChanged="Query_TextChanged" PreviewKeyDown="Query_PreviewKeyDown" PreviewKeyUp="Query_PreviewKeyUp"
                              PreviewTextInput="Query_PreviewTextInput"
                              InputMethod.PreferredImeState="DoNotCare" />
                     <!-- On the all-apps screen, what was typed to jump to an app ("clau" → Claude). -->
-                    <TextBlock Grid.Column="1" x:Name="TypeAhead" FontSize="22" HorizontalAlignment="Right" VerticalAlignment="Center"
+                    <TextBlock Grid.Column="1" x:Name="TypeAhead" FontSize="26" HorizontalAlignment="Right" VerticalAlignment="Center"
                                Margin="0,0,4,0" Foreground="{DynamicResource AccentBrush}" IsHitTestVisible="False" Visibility="Collapsed" />
                     <Canvas Grid.Column="1" x:Name="CaretLayer" IsHitTestVisible="False">
+                        <!-- "— AI에게 물어보기": right after a typed question while asking is the top result, like Spotlight's "— Siri에게 물어보기". -->
+                        <TextBlock x:Name="AskHint" Text="— Qutra에게 묻기" FontSize="26" Foreground="{DynamicResource PlaceholderBrush}" Visibility="Collapsed" />
                         <Rectangle x:Name="Caret" Width="2" RadiusX="1" RadiusY="1" Fill="{DynamicResource TextBrush}" Visibility="Collapsed">
+                            <Rectangle.Effect>
+                                <DropShadowEffect Color="#9FD8FF" BlurRadius="6" ShadowDepth="0" Opacity="0.38" />
+                            </Rectangle.Effect>
                             <Rectangle.RenderTransform>
                                 <TranslateTransform x:Name="CaretMove" />
                             </Rectangle.RenderTransform>
@@ -352,15 +351,18 @@
                     </Canvas>
                     <TextBlock Grid.Column="2" x:Name="Status" FontSize="13" Foreground="{DynamicResource SubtleTextBrush}"
                                VerticalAlignment="Center" Margin="12,0,0,0" />
+                    <!-- Dictation, as the microphone in Spotlight's field. -->
+                    <TextBlock Grid.Column="3" x:Name="Mic" Text="&#xE720;" FontFamily="{StaticResource IconFont}" FontSize="24" Opacity="0.7" Margin="14,0,0,0"
+                               Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Cursor="Hand" ToolTip="말하기" AutomationProperties.Name="말하기" MouseLeftButtonUp="Mic_Click" />
                 </Grid>
 
             </Grid>
-            <Border CornerRadius="31" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" IsHitTestVisible="False" />
+            <Border x:Name="BarOutline" CornerRadius="44" BorderThickness="1" BorderBrush="{DynamicResource BarRimBrush}" IsHitTestVisible="False" />
         </Grid>
 
         <!-- The results card. Its height animates towards the content's; at zero it fades out. On the app screen it widens. -->
         <Grid x:Name="ListSurface" Margin="0,10,0,0" Width="720" Height="0" Opacity="0" HorizontalAlignment="Center" SizeChanged="ListSurface_SizeChanged">
-            <Border CornerRadius="31" Background="{DynamicResource SolidPanelBrush}" Effect="{StaticResource SurfaceShadow}" />
+            <Border CornerRadius="36" Background="{DynamicResource SolidPanelBrush}" Effect="{StaticResource SurfaceShadow}" />
             <Grid x:Name="ListPanel" SizeChanged="ListPanel_SizeChanged">
                 <Canvas IsHitTestVisible="False">
                     <Image x:Name="ListBackdrop" Stretch="None" RenderOptions.BitmapScalingMode="Linear" />
@@ -376,7 +378,7 @@
                 </Border>
                 <ListBox x:Name="Results" ItemsSource="{Binding Source={StaticResource GroupedResults}}"
                          ItemTemplateSelector="{StaticResource ResultSelector}" ItemContainerStyle="{StaticResource RowStyle}"
-                         Template="{StaticResource GlassList}" Background="Transparent" BorderThickness="0" Padding="0,4,0,6" MaxHeight="500" Visibility="Collapsed"
+                         Template="{StaticResource GlassList}" Background="Transparent" BorderThickness="0" Padding="0,4,0,6" MaxHeight="570" Visibility="Collapsed"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Hidden"
                          VirtualizingPanel.IsVirtualizing="False" Focusable="False" KeyboardNavigation.TabNavigation="None"
                          PreviewMouseLeftButtonDown="List_PreviewMouseLeftButtonDown" PreviewMouseWheel="List_PreviewMouseWheel" PreviewMouseRightButtonUp="List_PreviewMouseRightButtonUp">
@@ -437,28 +439,6 @@
                     </Border>
                 </Grid>
 
-                <!-- Chat with the local AI (Enter on an "AI에게 묻기" row): the conversation and an input line. Replaces the result list while open. -->
-                <Grid x:Name="AiPanel" Height="520" Margin="20,10,20,10" Visibility="Collapsed">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <Grid>
-                        <TextBox x:Name="AiOutput" IsReadOnly="True" Focusable="False" BorderThickness="0" Background="Transparent" Padding="4,4"
-                                 Foreground="{DynamicResource TextBrush}" FontSize="16" TextWrapping="Wrap" VerticalScrollBarVisibility="Hidden" />
-                        <local:ScrollThumb x:Name="AiThumb" />
-                    </Grid>
-                    <Border Grid.Row="1" CornerRadius="12" Margin="0,8,0,0" Background="{DynamicResource GlyphBackBrush}">
-                        <Grid>
-                            <TextBox x:Name="AiInput" BorderThickness="0" Background="Transparent" Padding="14,10"
-                                     Foreground="{DynamicResource TextBrush}" CaretBrush="{DynamicResource TextBrush}" SelectionBrush="{DynamicResource AccentBrush}"
-                                     FontSize="16" PreviewKeyDown="AiInput_PreviewKeyDown" />
-                            <TextBlock x:Name="AiBusy" Text="생각하는 중…" FontSize="16" Margin="14,0" VerticalAlignment="Center" IsHitTestVisible="False"
-                                       Foreground="{DynamicResource PlaceholderBrush}" Visibility="Collapsed" />
-                        </Grid>
-                    </Border>
-                </Grid>
-
                 <!-- Every installed app, sorted and sectioned by initial ("앱", "app", "프로그램", ...). -->
                 <Grid>
                     <ListBox x:Name="AppGrid" ItemsSource="{Binding Source={StaticResource GroupedApps}}"
@@ -487,7 +467,7 @@
                     </StackPanel>
                 </Canvas>
             </Grid>
-            <Border CornerRadius="31" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" IsHitTestVisible="False" />
+            <Border CornerRadius="36" BorderThickness="1" BorderBrush="{DynamicResource BorderBrush}" IsHitTestVisible="False" />
         </Grid>
     </StackPanel>
 </Window>

@@ -50,6 +50,21 @@ public sealed class QuicklightSettings
     [JsonIgnore] public IReadOnlyList<string> DemotedPathsInEffect => AdvancedSearch ? DemotedPaths : Builtin.DemotedPaths;
     [JsonIgnore] public IReadOnlyList<string> ExcludedPathsInEffect => AdvancedSearch ? ExcludedPaths : Builtin.ExcludedPaths;
 
+    /// <summary>Qutra (the AI) on or off. Off: no "ask" result, a plain search placeholder, no model in memory. Independent of whether the model is installed.</summary>
+    public bool AiEnabled { get; set; } = true;
+
+    /// <summary>The AI may operate other apps (clicks, typing) through agent-desktop once that is downloaded. Every action asks first.</summary>
+    public bool ComputerControl { get; set; }
+
+    /// <summary>How long past AI conversations are kept: "30d", "1y" or "forever" (pinned ones always stay).</summary>
+    public string AiKeepConversations { get; set; } = "30d";
+
+    /// <summary>What the conversation app opens with: "recent" (the latest conversation) or "new".</summary>
+    public string AiOpenWith { get; set; } = "recent";
+
+    /// <summary>"Quicklight에게 묻기" in Explorer's right-click menu (a per-user registry entry).</summary>
+    public bool ExplorerMenu { get; set; }
+
     public int MaxResults { get; set; } = 12;
 
     /// <summary>Everything-backed file search.</summary>

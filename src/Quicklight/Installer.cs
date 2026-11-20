@@ -106,6 +106,7 @@ public static class Installer
         if (MessageBox.Show("Quicklight을 제거할까요?\n설정과 기록은 남습니다.", "Quicklight 제거",
                 MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return 1;
         Autostart.Sync(false);
+        try { Core.Integration.ContextMenuRegistration.Unregister(); } catch (Exception ex) { Log.Error("context menu cleanup failed", ex); }
         try { Registry.CurrentUser.DeleteSubKey(KeyPath, false); } catch (Exception ex) { Log.Error("uninstall registration cleanup failed", ex); }
         try
         {

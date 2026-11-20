@@ -12,6 +12,26 @@
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="{DynamicResource HeaderBrush}" />
             <Setter Property="Margin" Value="6,22,0,8" />
+            <Setter Property="ToolTipService.InitialShowDelay" Value="150" />
+            <Setter Property="ToolTipService.ShowDuration" Value="30000" />
+        </Style>
+        <!-- Details live in tooltips, shown quickly and long enough to read, in the window's colours. -->
+        <Style TargetType="TextBlock" x:Key="Tip">
+            <Setter Property="ToolTipService.InitialShowDelay" Value="150" />
+            <Setter Property="ToolTipService.ShowDuration" Value="30000" />
+        </Style>
+        <Style TargetType="ToolTip">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToolTip">
+                        <Border CornerRadius="8" Background="{DynamicResource MenuBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="10,6" MaxWidth="360">
+                            <ContentPresenter TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style TargetType="TextBlock" x:Key="Hint">
             <Setter Property="FontSize" Value="11.5" />
@@ -67,6 +87,8 @@
 
         <!-- On/off switch. -->
         <Style TargetType="CheckBox">
+            <Setter Property="ToolTipService.InitialShowDelay" Value="150" />
+            <Setter Property="ToolTipService.ShowDuration" Value="30000" />
             <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="Margin" Value="0,8" />
             <Setter Property="Cursor" Value="Hand" />
@@ -208,17 +230,9 @@
                         <DockPanel Style="{StaticResource Line}">
                             <TextBox x:Name="HotkeyBox" DockPanel.Dock="Right" Width="170" IsReadOnly="True" IsReadOnlyCaretVisible="False"
                                      HorizontalContentAlignment="Center" PreviewKeyDown="HotkeyBox_PreviewKeyDown" Cursor="Hand" />
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="여는 단축키" />
-                                <TextBlock Text="칸을 누르고 새 조합을 누르십시오" Style="{StaticResource Hint}" />
-                            </StackPanel>
+                            <TextBlock Text="여는 단축키" VerticalAlignment="Center" Style="{StaticResource Tip}" ToolTip="칸을 누르고 새 조합 입력" />
                         </DockPanel>
-                        <CheckBox x:Name="HangulHotkey">
-                            <StackPanel>
-                                <TextBlock Text="한/영 키를 누른 채로 열기" />
-                                <TextBlock Text="켜면 한/영 키를 누른 채 단축키의 글쇠(예: Space)를 눌러도 열립니다. 위 단축키는 그대로 쓸 수 있습니다. 한/영 키만 누르면 평소처럼 전환되지만 키를 뗄 때 전환됩니다" Style="{StaticResource Hint}" TextWrapping="Wrap" />
-                            </StackPanel>
-                        </CheckBox>
+                        <CheckBox x:Name="HangulHotkey" Content="한/영 키로 열기" ToolTip="한/영 키를 누른 채 단축키의 글쇠를 눌러도 열림" />
                         <DockPanel Style="{StaticResource Line}">
                             <Border DockPanel.Dock="Right" Style="{StaticResource Segments}">
                                 <StackPanel Orientation="Horizontal">
@@ -239,36 +253,16 @@
                             <TextBlock Text="배경" VerticalAlignment="Center" />
                         </DockPanel>
                         <CheckBox x:Name="LaunchAtStartup" Content="Windows 시작 시 실행" />
-                        <CheckBox x:Name="AutoUpdate">
-                            <StackPanel>
-                                <TextBlock Text="자동 업데이트" />
-                                <TextBlock Text="검색창이 닫혀 있을 때 새 버전을 설치합니다" Style="{StaticResource Hint}" />
-                            </StackPanel>
-                        </CheckBox>
+                        <CheckBox x:Name="AutoUpdate" Content="자동 업데이트" ToolTip="검색창이 닫혀 있을 때 설치" />
                     </StackPanel>
                 </Border>
 
                 <TextBlock Text="검색" Style="{StaticResource Section}" />
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
-                        <CheckBox x:Name="Terminal">
-                            <StackPanel>
-                                <TextBlock Text="간이 터미널" />
-                                <TextBlock Text="명령어를 입력하고 Enter를 누르면 실행 결과와 입력창을 보여 줍니다" Style="{StaticResource Hint}" />
-                            </StackPanel>
-                        </CheckBox>
-                        <CheckBox x:Name="FileSearch">
-                            <StackPanel>
-                                <TextBlock Text="파일 검색" />
-                                <TextBlock Text="Everything으로 파일과 폴더를 찾습니다" Style="{StaticResource Hint}" />
-                            </StackPanel>
-                        </CheckBox>
-                        <CheckBox x:Name="AdvancedSearch">
-                            <StackPanel>
-                                <TextBlock Text="상세 설정" />
-                                <TextBlock Text="결과 수와 경로 규칙을 직접 정합니다. 끄면 기본값으로 검색하고, 적어 둔 값은 남아 있습니다" Style="{StaticResource Hint}" />
-                            </StackPanel>
-                        </CheckBox>
+                        <CheckBox x:Name="Terminal" Content="간이 터미널" ToolTip="명령어를 입력해 실행 결과 보기" />
+                        <CheckBox x:Name="FileSearch" Content="파일 검색" ToolTip="Everything 사용" />
+                        <CheckBox x:Name="AdvancedSearch" Content="상세 설정" ToolTip="끄면 기본값 사용 (입력한 값은 유지)" />
                         <StackPanel IsEnabled="{Binding IsChecked, ElementName=AdvancedSearch}">
                             <StackPanel.Style>
                                 <Style TargetType="StackPanel">
@@ -292,28 +286,82 @@
                             <TextBlock Text="최대 폴더 수" VerticalAlignment="Center" />
                         </DockPanel>
                         <StackPanel Margin="0,8">
-                            <TextBlock Text="순위를 낮출 경로" />
-                            <TextBlock Text="한 줄에 하나. 이 글자를 포함한 경로는 아래로 내립니다" Style="{StaticResource Hint}" Margin="0,2,0,6" />
+                            <TextBlock Text="순위 낮출 경로" Style="{StaticResource Tip}" ToolTip="한 줄에 하나. 포함한 경로는 아래로" Margin="0,0,0,6" />
                             <TextBox x:Name="DemotedPaths" Style="{StaticResource MultiLine}" />
                         </StackPanel>
                         <StackPanel Margin="0,8">
-                            <TextBlock Text="숨길 경로" />
-                            <TextBlock Text="한 줄에 하나. 이 글자를 포함한 경로는 보이지 않습니다" Style="{StaticResource Hint}" Margin="0,2,0,6" />
+                            <TextBlock Text="숨길 경로" Style="{StaticResource Tip}" ToolTip="한 줄에 하나. 포함한 경로는 숨김" Margin="0,0,0,6" />
                             <TextBox x:Name="ExcludedPaths" Style="{StaticResource MultiLine}" />
                         </StackPanel>
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <TextBlock Text="AI" Style="{StaticResource Section}" />
+                <!-- Qutra (Quicklight Transformer, shown on hover), the AI, with its model and computer control straight under the switch. -->
+                <StackPanel Orientation="Horizontal" Margin="6,22,0,8">
+                    <TextBlock Text="Qutra" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource HeaderBrush}" ToolTip="Quicklight Transformer"
+                               ToolTipService.InitialShowDelay="150" ToolTipService.ShowDuration="30000" />
+                    <Border CornerRadius="8" Background="{DynamicResource AccentBrush}" Padding="6,1,6,2" Margin="8,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="Beta" FontSize="10.5" FontWeight="SemiBold" Foreground="White" />
+                    </Border>
+                </StackPanel>
                 <Border Style="{StaticResource Card}">
-                    <StackPanel Margin="0,6">
-                        <TextBlock x:Name="AiStatus" TextWrapping="Wrap" />
-                        <TextBlock x:Name="AiHint" Style="{StaticResource Hint}" />
-                        <ProgressBar x:Name="AiProgress" Height="6" Minimum="0" Maximum="1" Margin="0,8,0,0" Visibility="Collapsed" />
-                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                            <Button x:Name="AiDownload" Content="다운로드" Style="{StaticResource Add}" Click="AiDownload_Click" Margin="0,4,8,0" />
-                            <Button x:Name="AiDelete" Content="삭제" Style="{StaticResource Add}" Click="AiDelete_Click" Margin="0,4,0,0" />
+                    <StackPanel>
+                        <CheckBox x:Name="AiEnabled" Content="Qutra 사용" ToolTip="끄면 검색창은 일반 검색만" />
+
+                        <!-- The model -->
+                        <StackPanel Margin="0,8,0,4">
+                            <TextBlock Text="모델" Style="{StaticResource Tip}" ToolTip="이 PC에서만 실행. 약 6GB, RAM 64GB 이상 (MCP 서버는 RAM 무관)" />
+                            <TextBlock x:Name="AiStatus" TextWrapping="Wrap" Margin="0,2,0,0" Foreground="{DynamicResource SubtleTextBrush}" />
+                            <ProgressBar x:Name="AiProgress" Height="6" Minimum="0" Maximum="1" Margin="0,8,0,0" Visibility="Collapsed" />
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <Button x:Name="AiDownload" Content="다운로드" Style="{StaticResource Add}" Click="AiDownload_Click" Margin="0,4,8,0" />
+                                <Button x:Name="AiDelete" Content="삭제" Style="{StaticResource Add}" Click="AiDelete_Click" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Computer control (agent-desktop), straight under the model -->
+                        <StackPanel Margin="0,8,0,4">
+                            <TextBlock Text="컴퓨터 제어" Style="{StaticResource Tip}" ToolTip="agent-desktop. 화면 읽기는 자동, 조작은 매번 확인, Esc로 중단. Windows가 막으면 이 기능만 꺼짐" />
+                            <TextBlock x:Name="ControlStatus" TextWrapping="Wrap" Margin="0,2,0,0" Foreground="{DynamicResource SubtleTextBrush}" />
+                            <ProgressBar x:Name="ControlProgress" Height="6" Minimum="0" Maximum="1" Margin="0,8,0,0" Visibility="Collapsed" />
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <Button x:Name="ControlDownload" Content="다운로드" Style="{StaticResource Add}" Click="ControlDownload_Click" Margin="0,4,8,0" />
+                                <Button x:Name="ControlDelete" Content="삭제" Style="{StaticResource Add}" Click="ControlDelete_Click" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel IsEnabled="{Binding IsChecked, ElementName=AiEnabled}">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Style.Triggers>
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter Property="Opacity" Value="0.45" />
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <CheckBox x:Name="ComputerControl" Content="컴퓨터 제어 사용" />
+                            <DockPanel Style="{StaticResource Line}">
+                                <Border DockPanel.Dock="Right" Style="{StaticResource Segments}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton x:Name="KeepMonth" GroupName="Keep" Content="30일" />
+                                        <RadioButton x:Name="KeepYear" GroupName="Keep" Content="1년" />
+                                        <RadioButton x:Name="KeepForever" GroupName="Keep" Content="계속" />
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock Text="대화 보관" VerticalAlignment="Center" Style="{StaticResource Tip}" ToolTip="고정한 대화는 유지" />
+                            </DockPanel>
+                            <DockPanel Style="{StaticResource Line}">
+                                <Border DockPanel.Dock="Right" Style="{StaticResource Segments}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <RadioButton x:Name="OpenRecent" GroupName="OpenWith" Content="최근 대화" />
+                                        <RadioButton x:Name="OpenNew" GroupName="OpenWith" Content="새 대화" />
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock Text="대화 앱 열 때" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <CheckBox x:Name="ExplorerMenu" Content="탐색기 우클릭 메뉴" ToolTip="'Qutra에게 묻기' 추가 (Windows 11: 더 보기)" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -322,12 +370,10 @@
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <StackPanel Margin="0,8">
-                            <TextBlock Text="기본 검색 주소" />
-                            <TextBlock Text="{}{0} 자리에 검색어가 들어갑니다" Style="{StaticResource Hint}" Margin="0,2,0,6" />
+                            <TextBlock Text="기본 검색 주소" Style="{StaticResource Tip}" ToolTip="{}{0} 자리에 검색어" Margin="0,0,0,6" />
                             <TextBox x:Name="WebSearchUrl" />
                         </StackPanel>
-                        <TextBlock Text="키워드 검색" Margin="0,8,0,0" />
-                        <TextBlock Text="키워드와 주소. 'yt 고양이' 처럼 키워드 뒤의 검색어가 {0} 에 들어갑니다" Style="{StaticResource Hint}" Margin="0,2,0,4" />
+                        <TextBlock Text="키워드 검색" Style="{StaticResource Tip}" ToolTip="'yt 고양이' → 키워드 뒤 검색어가 {0} 자리에" Margin="0,8,0,4" />
                         <ItemsControl x:Name="SearchEngines" ItemTemplate="{StaticResource PairRow}" />
                         <Button Content="+ 키워드 추가" Style="{StaticResource Add}" Click="AddEngine_Click" />
                     </StackPanel>
@@ -339,35 +385,29 @@
                         <CheckBox x:Name="CurrencyConversion" Content="환전 결과 표시" />
                         <DockPanel Style="{StaticResource Line}">
                             <TextBox x:Name="DefaultCurrency" DockPanel.Dock="Right" Width="90" HorizontalContentAlignment="Center" />
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="기본 대상 통화" />
-                                <TextBlock Text="auto 는 Windows 지역 설정의 통화. 예: USD, JPY" Style="{StaticResource Hint}" />
-                            </StackPanel>
+                            <TextBlock Text="기본 통화" VerticalAlignment="Center" Style="{StaticResource Tip}" ToolTip="auto: 지역 설정 통화. 예: USD, JPY" />
                         </DockPanel>
                     </StackPanel>
                 </Border>
 
-                <TextBlock Text="스니펫" Style="{StaticResource Section}" />
+                <TextBlock Text="스니펫" Style="{StaticResource Section}" ToolTip="키 입력 후 Enter로 붙여넣기" />
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="키를 치고 Enter를 누르면 글을 붙여 넣습니다" Style="{StaticResource Hint}" Margin="0,8,0,4" />
-                        <ItemsControl x:Name="Snippets" ItemTemplate="{StaticResource PairRow}" />
+                        <ItemsControl x:Name="Snippets" ItemTemplate="{StaticResource PairRow}" Margin="0,8,0,0" />
                         <Button Content="+ 스니펫 추가" Style="{StaticResource Add}" Click="AddSnippet_Click" />
                     </StackPanel>
                 </Border>
 
-                <TextBlock Text="사용자 명령" Style="{StaticResource Section}" />
+                <TextBlock Text="사용자 명령" Style="{StaticResource Section}" ToolTip="이름 · 경로 / 별칭(쉼표) · 인자" />
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="이름 · 경로 / 다른 이름 (쉼표로 구분) · 인자" Style="{StaticResource Hint}" Margin="0,8,0,4" />
-                        <ItemsControl x:Name="Commands" ItemTemplate="{StaticResource CommandRow}" />
+                        <ItemsControl x:Name="Commands" ItemTemplate="{StaticResource CommandRow}" Margin="0,8,0,0" />
                         <Button Content="+ 명령 추가" Style="{StaticResource Add}" Click="AddCommand_Click" />
                     </StackPanel>
                 </Border>
 
                 <Button Content="기본값으로 되돌리기" Click="Reset_Click" HorizontalAlignment="Left" Margin="0,28,0,0"
-                        Background="#D13438" Foreground="White" />
-                <TextBlock Text="스니펫과 사용자 명령은 그대로 둡니다. 저장을 눌러야 적용됩니다" Style="{StaticResource Hint}" Margin="2,6,0,0" />
+                        Background="#D13438" Foreground="White" ToolTip="스니펫과 사용자 명령은 유지. 저장해야 적용" />
             </StackPanel>
         </ScrollViewer>
     </DockPanel>

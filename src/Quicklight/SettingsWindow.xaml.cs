@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using Quicklight.Core;
@@ -8,7 +9,7 @@ using Quicklight.Core.Ai;
 
 namespace Quicklight;
 
-/// <summary>Settings as a window (Alt+. in the launcher, or the tray menu). Saving writes settings.json and applies it.</summary>
+/// <summary>Settings as a window (Ctrl+, in the launcher, or the tray menu). Saving writes settings.json and applies it.</summary>
 public partial class SettingsWindow : Window
 {
     /// <summary>One editable row of a keyword, snippet or command list.</summary>
@@ -40,8 +41,9 @@ public partial class SettingsWindow : Window
         _apply = apply;
         InitializeComponent();
         SourceInitialized += (_, _) => NativeUi.SetDarkTitleBar(new WindowInteropHelper(this).Handle, Theme.IsDark);
-        Closed += (_, _) => { _open = null; _aiCts?.Cancel(); };
+        Closed += (_, _) => { _open = null; _aiCts?.Cancel(); _controlCts?.Cancel(); };
         RefreshAi();
+        RefreshControl();
         Fill(s);
         Snippets.ItemsSource = _snippets = new(s.Snippets.Select(p => new Row { A = p.Key, B = p.Value }));
         Commands.ItemsSource = _commands = new(s.Commands.Select(c => new Row
@@ -54,6 +56,11 @@ public partial class SettingsWindow : Window
     void Fill(QuicklightSettings s)
     {
         HotkeyBox.Text = s.Hotkey;
+        (s.AiKeepConversations switch { "1y" => KeepYear, "forever" => KeepForever, _ => KeepMonth }).IsChecked = true;
+        (s.AiOpenWith == "new" ? OpenNew : OpenRecent).IsChecked = true;
+        ExplorerMenu.IsChecked = s.ExplorerMenu;
+        AiEnabled.IsChecked = s.AiEnabled;
+        ComputerControl.IsChecked = s.ComputerControl;
         HangulHotkey.IsChecked = s.HangulHotkey;
         (s.Theme switch { "dark" => ThemeDark, "light" => ThemeLight, _ => ThemeSystem }).IsChecked = true;
         (s.Backdrop == "solid" ? BackdropSolid : BackdropAcrylic).IsChecked = true;
@@ -77,7 +84,7 @@ public partial class SettingsWindow : Window
     /// <summary>Refills the form with the defaults; nothing changes until Save.</summary>
     void Reset_Click(object sender, RoutedEventArgs e)
     {
-        if (MessageBox.Show(this, "스니펫과 사용자 명령을 뺀 모든 설정을 기본값으로 되돌릴까요?\n저장을 눌러야 적용됩니다.", "Quicklight",
+        if (MessageBox.Show(this, "기본값으로 되돌릴까요?\n(스니펫, 사용자 명령 제외)", "Quicklight",
                 MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK)
             Fill(new QuicklightSettings());
     }
@@ -86,6 +93,11 @@ public partial class SettingsWindow : Window
     {
         var s = _settings;
         s.Hotkey = HotkeyBox.Text;
+        s.AiKeepConversations = KeepYear.IsChecked == true ? "1y" : KeepForever.IsChecked == true ? "forever" : "30d";
+        s.AiOpenWith = OpenNew.IsChecked == true ? "new" : "recent";
+        s.ExplorerMenu = ExplorerMenu.IsChecked == true;
+        s.AiEnabled = AiEnabled.IsChecked == true;
+        s.ComputerControl = ComputerControl.IsChecked == true;
         s.HangulHotkey = HangulHotkey.IsChecked == true;
         s.Theme = ThemeDark.IsChecked == true ? "dark" : ThemeLight.IsChecked == true ? "light" : "system";
         s.Backdrop = BackdropSolid.IsChecked == true ? "solid" : "acrylic";
@@ -114,7 +126,7 @@ public partial class SettingsWindow : Window
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Log.Error("settings save failed", ex);
-            MessageBox.Show(this, "설정을 저장하지 못했습니다.\n" + ex.Message, "Quicklight", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "저장 실패\n" + ex.Message, "Quicklight", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         _apply();
@@ -142,13 +154,69 @@ public partial class SettingsWindow : Window
     void RefreshAi()
     {
         bool ram = AiModel.HasEnoughRam, installed = AiModel.IsInstalled, busy = _aiCts is not null;
-        AiStatus.Text = !ram ? $"RAM {AiModel.RamBytes / (1L << 30)}GB: AI는 RAM 64GB 이상에서만 쓸 수 있습니다"
-            : installed ? "사용 가능. 질문을 입력하면 'AI에게 묻기'가 나옵니다" : "모델을 내려받으면 사용할 수 있습니다";
-        AiHint.Text = ram ? $"{AiModel.Repository} (약 6GB)와 llama.cpp 를 내려받아 이 PC 안에서만 실행합니다. 사용하지 않으면 10분 뒤 메모리에서 내립니다."
-            : "MCP 서버(Quicklight.exe --mcp)는 RAM과 관계없이 사용할 수 있습니다.";
-        AiDownload.Visibility = ram && !installed ? Visibility.Visible : Visibility.Collapsed;
+        AiStatus.Text = !ram ? $"RAM {AiModel.RamBytes / (1L << 30)}GB: 64GB 이상 필요"
+            : installed ? (AiModel.HasVision ? "설치됨" : "설치됨 · 이미지 파일 없음") : "미설치";
+        AiDownload.Visibility = ram && (!installed || !AiModel.HasVision) ? Visibility.Visible : Visibility.Collapsed;
         AiDownload.Content = busy ? "취소" : "다운로드";
         AiDelete.Visibility = installed && !busy ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ---------- computer control (agent-desktop) ----------
+
+    CancellationTokenSource? _controlCts;
+
+    void RefreshControl()
+    {
+        bool busy = _controlCts is not null, installed = AgentDesktop.IsInstalled;
+        ControlStatus.Text = installed ? (AgentDesktop.CheckAvailable() ?? $"설치됨 · {AgentDesktop.Version}") : "미설치";
+        ControlDownload.Visibility = installed && !busy ? Visibility.Collapsed : Visibility.Visible;
+        ControlDownload.Content = busy ? "취소" : "다운로드";
+        ControlDelete.Visibility = installed && !busy ? Visibility.Visible : Visibility.Collapsed;
+        ComputerControl.IsEnabled = installed;
+    }
+
+    async void ControlDownload_Click(object sender, RoutedEventArgs e)
+    {
+        if (_controlCts is { } running) { running.Cancel(); return; }
+        var cts = _controlCts = new CancellationTokenSource();
+        ControlProgress.Visibility = Visibility.Visible;
+        ControlProgress.IsIndeterminate = true;
+        RefreshControl();
+        var progress = new Progress<(string Label, double? Fraction)>(p =>
+        {
+            ControlStatus.Text = p.Label;
+            ControlProgress.IsIndeterminate = p.Fraction is null;
+            if (p.Fraction is { } f) ControlProgress.Value = f;
+        });
+        try
+        {
+            await AgentDesktop.InstallAsync(progress, cts.Token);
+            ComputerControl.IsChecked = true; // downloaded on purpose: switch it on (Save applies it)
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Log.Error("agent-desktop download failed", ex);
+            MessageBox.Show(this, "내려받기 실패\n" + ex.Message, "Quicklight", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            _controlCts = null;
+            ControlProgress.Visibility = Visibility.Collapsed;
+            RefreshControl();
+        }
+    }
+
+    void ControlDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(this, "컴퓨터 제어를 삭제할까요?", "Quicklight", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        try { AgentDesktop.Delete(); ComputerControl.IsChecked = false; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error("agent-desktop delete failed", ex);
+            MessageBox.Show(this, "삭제 실패\n" + ex.Message, "Quicklight", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        RefreshControl();
     }
 
     async void AiDownload_Click(object sender, RoutedEventArgs e)
@@ -169,7 +237,7 @@ public partial class SettingsWindow : Window
         catch (Exception ex)
         {
             Log.Error("ai download failed", ex);
-            MessageBox.Show(this, "내려받지 못했습니다. 다시 시도하면 이어서 받습니다.\n" + ex.Message, "Quicklight", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "내려받기 실패 (다시 시도하면 이어받음)\n" + ex.Message, "Quicklight", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
         {
@@ -181,12 +249,12 @@ public partial class SettingsWindow : Window
 
     void AiDelete_Click(object sender, RoutedEventArgs e)
     {
-        if (MessageBox.Show(this, "내려받은 AI 모델과 실행 파일을 지울까요?", "Quicklight", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
-        try { AiModel.Delete(); }
+        if (MessageBox.Show(this, "모델을 삭제할까요?", "Quicklight", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        try { Siri.AiHost.Current?.Session.Stop(); AiModel.Delete(); } // an idle server would lock the files
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Log.Error("ai delete failed", ex);
-            MessageBox.Show(this, "지우지 못했습니다. AI가 켜져 있으면 10분 뒤나 Quicklight 를 껐다 켠 뒤 다시 시도하세요.\n" + ex.Message, "Quicklight", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, "삭제 실패: 사용 중입니다. 잠시 뒤 다시 시도하세요.\n" + ex.Message, "Quicklight", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         RefreshAi();
     }
@@ -214,6 +282,7 @@ public partial class SettingsWindow : Window
     /// <summary>Records the pressed combination, in the format HotkeyManager parses.</summary>
     void HotkeyBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        var box = (TextBox)sender;
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         var mods = Keyboard.Modifiers;
         if (mods == ModifierKeys.None && key is Key.Tab or Key.Escape) return; // leave the box, close the window
@@ -237,6 +306,6 @@ public partial class SettingsWindow : Window
         if (mods.HasFlag(ModifierKeys.Windows)) parts.Add("Win");
         parts.Add(name);
         var spec = string.Join("+", parts);
-        if (HotkeyManager.TryParse(spec, out _, out _)) HotkeyBox.Text = spec;
+        if (HotkeyManager.TryParse(spec, out _, out _)) box.Text = spec;
     }
 }

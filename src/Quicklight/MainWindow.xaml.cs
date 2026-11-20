@@ -10,7 +10,6 @@ using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using Quicklight.Core;
 using Quicklight.Core.Activity;
-using Quicklight.Core.Ai;
 using Quicklight.Core.Everything;
 using Quicklight.Core.Matching;
 using Quicklight.Core.Models;
@@ -24,9 +23,11 @@ public partial class MainWindow : Window
 {
     const string TopHitGroup = ResultItem.HeroGroup;
     const double ShadowMargin = 24;      // DIPs around the panel, room for the drop shadow (matches Shell.Margin)
-    const double MaxPanelHeight = 580;   // DIPs; the bar sits so that a fully expanded panel is centered on screen
-    const double CardRadius = 31;        // corners of the results card: the same as the search pill
-    const double CardOffset = 72;        // DIPs from the top of the pill to the top of the card (62 pill + 10 gap)
+    double _roomCap = 570;
+    const double MaxPanelHeight = 700;   // DIPs; the bar sits so that a fully expanded panel is centered on screen
+    const double CardRadius = 36;        // corners of the results card
+    const double BarRadiusMax = 44;      // the search capsule is a pill (88 high); a taller (wrapped) one keeps this curve
+    const double CardGap = 10;           // DIPs between the capsule and the results card
     const double PillWidth = 720;        // the search pill, and the card except on the app screen
     const double AppCardWidth = 940;     // the card on the app screen: nine tile columns (the window leaves space for it)
     const double ClipCardWidth = 840;    // the card on the clipboard screen
@@ -71,13 +72,13 @@ public partial class MainWindow : Window
         _settings = settings;
         _updates = updates;
         InitializeComponent();
+        Theme.ApplyInk(Resources); // the capsule and card are dark glass whatever the system theme, as Siri's are
         TerminalThumb.Attach(TerminalOutput);
-        AiThumb.Attach(AiOutput);
         AppGridThumb.Attach(AppGrid);
         ((CollectionViewSource)Resources["GroupedResults"]).Source = _items;
         ((CollectionViewSource)Resources["GroupedApps"]).Source = _apps;
         PreviewParts.ItemsSource = _parts;
-        Deactivated += (_, _) => { if (!Pinned) HideLauncher(); };
+        Deactivated += (_, _) => { if (!Pinned && !_handingOffToAi) HideLauncher(); };
         // The window reaches the bottom of the screen so the panel can grow inside it; a click beside the panel closes it.
         MouseDown += (_, e) => { if (!Pinned && e.OriginalSource is Visual v && !BarPanel.IsAncestorOf(v) && !ListPanel.IsAncestorOf(v)) HideLauncher(); };
         Query.SelectionChanged += (_, _) => SyncCaret();
@@ -146,7 +147,7 @@ public partial class MainWindow : Window
     {
         bool solid = _settings.Backdrop.Equals("solid", StringComparison.OrdinalIgnoreCase);
         Backdrop.Visibility = ListBackdrop.Visibility = solid ? Visibility.Collapsed : Visibility.Visible;
-        Tint.SetResourceReference(Border.BackgroundProperty, solid ? "SolidPanelBrush" : "PanelBrush");
+        Tint.SetResourceReference(Border.BackgroundProperty, solid ? "SolidPanelBrush" : "BarTintBrush");
         ListTint.SetResourceReference(Border.BackgroundProperty, solid ? "SolidPanelBrush" : "PanelBrush");
     }
 
@@ -169,10 +170,14 @@ public partial class MainWindow : Window
         int panelTop = work.Top + Math.Max(0, (int)((work.Height - MaxPanelHeight * scale) / 2));
         int margin = (int)(ShadowMargin * scale);
         int y = panelTop - margin;
+        _roomCap = Math.Max(200, (work.Bottom - panelTop) / scale - 190); // capsule + gaps + footer: small screens must not clip the list
+        Results.MaxHeight = Math.Min(_clipMode ? AppGrid.Height : 570, _roomCap);
 
         if (!IsVisible)
         {
             _previousForeground = NativeUi.Foreground();
+            Ai?.CaptureContext(_previousForeground); // before this window takes the focus
+            Placeholder.Text = _settings.AiEnabled && Core.Ai.AiModel.IsAvailable ? "묻거나 검색" : "Quicklight 검색";
             Status.Text = ""; // a one-off message (e.g. a launch error) must not outlive the opening it was shown in
         }
 
@@ -183,6 +188,7 @@ public partial class MainWindow : Window
         // Start invisible: otherwise the panel flashes fully opaque until the animation's first frame.
         Shell.BeginAnimation(OpacityProperty, null);
         Shell.Opacity = 0;
+        BarGrid.Opacity = 1;
         _hiding = false; // shown again mid fade-out: removing the fade above means its Completed never fires
         NativeUi.Move(Handle, x, y);
         Height = (work.Bottom - y) / scale;
@@ -210,7 +216,7 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// A due app rescan (every ten minutes, on opening) is heavy on the CPU and the GC: start it once the opening
-    /// animation (230 ms) is over, not during it. A timer, not the animation's end, so a quick close cannot skip it.
+    /// animation is over. A timer lets the rescan happen even if the launcher closes quickly.
     /// </summary>
     async Task WarmUpAfterOpeningAsync()
     {
@@ -218,22 +224,34 @@ public partial class MainWindow : Window
         await _engine.WarmUpAsync();
     }
 
-    public void HideLauncher()
+    public void HideLauncher(bool aiHandoff = false)
     {
         if (!IsVisible || _hiding) return;
+        _voice.Stop(); // dictation must not type into a hidden window
         _updateCts?.Cancel(); // closing the launcher cancels an update check or download
         _cts?.Cancel(); // no point finishing Everything queries nobody will see
         Disarm();
         CancelHold();
         ClosePreview();
         CloseTerminal();
-        CloseAi();
         if (ActiveList.ContextMenu is { IsOpen: true } menu) menu.IsOpen = false;
-        AnimateOut(() =>
+        void Done()
         {
             Hide();
             Query.Clear(); // the next opening starts empty (↑ brings back recent queries)
-        });
+        }
+        if (aiHandoff)
+        {
+            // The answer window takes the place of the search bar; the results underneath can still fade out.
+            BarGrid.Opacity = 0;
+        }
+        if (!UiMotion.Enabled)
+        {
+            Shell.BeginAnimation(OpacityProperty, null);
+            Shell.Opacity = 0;
+            Done();
+        }
+        else AnimateOut(Done, aiHandoff ? UiMotion.Quick : UiMotion.Standard);
     }
 
     void CaptureBackdrop(int x, int y, int width, int height, double scale)
@@ -246,7 +264,7 @@ public partial class MainWindow : Window
             _backdropPad = pad / scale;
             Canvas.SetLeft(Backdrop, -_backdropPad - (ShellWidth - PillWidth) / 2);
             Canvas.SetTop(Backdrop, -_backdropPad);
-            Canvas.SetTop(ListBackdrop, -_backdropPad - CardOffset);
+            Canvas.SetTop(ListBackdrop, -_backdropPad - (BarGrid.ActualHeight + CardGap));
             PlaceListBackdrop();
         }
         catch (Exception ex) { Log.Error("backdrop capture failed", ex); }
@@ -281,14 +299,21 @@ public partial class MainWindow : Window
     void AnimateIn()
     {
         _hiding = false;
+        if (!UiMotion.Enabled)
+        {
+            Body.Effect = Bar.Effect = null;
+            CacheBody(false);
+            Shell.Opacity = 1;
+            return;
+        }
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        const double ms = 230;
+        const double ms = 200;
         CacheBody(true);
-        var blur = new BlurEffect { Radius = 16, RenderingBias = RenderingBias.Performance };
+        var blur = new BlurEffect { Radius = 8, RenderingBias = RenderingBias.Performance };
         Body.Effect = blur;
-        Bar.Effect = new BlurEffect { Radius = 16, RenderingBias = RenderingBias.Performance };
-        Shell.BeginAnimation(OpacityProperty, Anim(0, 1, 170, ease));
-        var focus = Anim(16, 0, ms, ease);
+        Bar.Effect = new BlurEffect { Radius = 8, RenderingBias = RenderingBias.Performance };
+        Shell.BeginAnimation(OpacityProperty, Anim(0, 1, UiMotion.Standard, ease));
+        var focus = Anim(8, 0, ms, ease);
         // Drop the effect and the cache once sharp: an idle BlurEffect would still cost a render pass per frame.
         focus.Completed += (_, _) =>
         {
@@ -297,14 +322,14 @@ public partial class MainWindow : Window
             CacheBody(false);
         };
         blur.BeginAnimation(BlurEffect.RadiusProperty, focus);
-        Bar.Effect.BeginAnimation(BlurEffect.RadiusProperty, Anim(16, 0, ms, ease));
+        Bar.Effect.BeginAnimation(BlurEffect.RadiusProperty, Anim(8, 0, ms, ease));
     }
 
     // Fade out, then hide. No blur: switching the sharp text to the cached, blurred bitmap flickered for a frame.
-    void AnimateOut(Action done)
+    void AnimateOut(Action done, int duration)
     {
         _hiding = true;
-        var fade = Anim(null, 0, 160, new CubicEase { EasingMode = EasingMode.EaseIn });
+        var fade = Anim(null, 0, duration, new CubicEase { EasingMode = EasingMode.EaseOut });
         fade.Completed += (_, _) =>
         {
             if (!_hiding) return; // shown again mid-animation
@@ -330,6 +355,7 @@ public partial class MainWindow : Window
         {
             _caretQueued = false;
             Query.UpdateLayout();
+            UpdateAskHint();
             UpdateCaret();
         });
     }
@@ -345,6 +371,11 @@ public partial class MainWindow : Window
         Caret.Height = r.Height;
         CaretMove.Y = p.Y;
         CaretMove.X = p.X - 1;
+        if (!UiMotion.Enabled)
+        {
+            Caret.BeginAnimation(OpacityProperty, null);
+            return;
+        }
         // Solid while typing or moving, then blink: starting the animation again restarts it from solid.
         if (_blink is null)
         {
@@ -368,13 +399,72 @@ public partial class MainWindow : Window
     /// <summary>The card is centered in the shell; its backdrop stays put on screen as the card widens.</summary>
     void PlaceListBackdrop() => Canvas.SetLeft(ListBackdrop, -_backdropPad - (ShellWidth - ListSurface.ActualWidth) / 2);
 
+    /// <summary>The capsule grows with a wrapped question: its curve, outline and shadow follow, and the card moves down with it.</summary>
+    void BarGrid_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        double r = Math.Min(e.NewSize.Height / 2, BarRadiusMax);
+        BarClip.Rect = new Rect(0, 0, e.NewSize.Width, e.NewSize.Height);
+        BarClip.RadiusX = BarClip.RadiusY = r;
+        BarShape.CornerRadius = BarOutline.CornerRadius = new CornerRadius(r);
+        if (e.HeightChanged) Canvas.SetTop(ListBackdrop, -_backdropPad - (e.NewSize.Height + CardGap));
+        SyncCaret();
+    }
+
+    readonly Siri.VoiceInput _voice = new();
+
+    /// <summary>The capsule's microphone: what is said is added to the query.</summary>
+    async void Mic_Click(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        Mic.Opacity = 1;
+        Mic.Foreground = (Brush)FindResource("AccentBrush");
+        var text = await _voice.ListenAsync(this);
+        Mic.Opacity = 0.7;
+        Mic.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
+        if (text is null || !IsVisible) return;
+        Query.Text += (Query.Text.Length > 0 ? " " : "") + text;
+        Query.CaretIndex = Query.Text.Length;
+        Query.Focus();
+    }
+
+    bool _askHintWanted;
+
+    /// <summary>
+    /// Puts "— AI에게 물어보기" right after the typed question; when the last line has no room it goes on a new line and the
+    /// capsule grows by that line.
+    /// </summary>
+    void UpdateAskHint()
+    {
+        if (!_askHintWanted || Query.Text.Length == 0)
+        {
+            AskHint.Visibility = Visibility.Collapsed;
+            if (Query.Margin.Bottom != 0) Query.Margin = new Thickness(0);
+            return;
+        }
+        var end = Query.GetRectFromCharacterIndex(Query.Text.Length);
+        if (end.IsEmpty) { AskHint.Visibility = Visibility.Collapsed; return; }
+        AskHint.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        bool fits = end.Right + 12 + AskHint.DesiredSize.Width < Query.ActualWidth;
+        double room = fits ? 0 : end.Height;
+        if (Math.Abs(Query.Margin.Bottom - room) > 0.5)
+        {
+            Query.Margin = new Thickness(0, 0, 0, room);
+            Query.UpdateLayout();
+            end = Query.GetRectFromCharacterIndex(Query.Text.Length);
+        }
+        var at = Query.TranslatePoint(fits ? new Point(end.Right + 12, end.Top) : new Point(2, end.Bottom), CaretLayer);
+        Canvas.SetLeft(AskHint, at.X);
+        Canvas.SetTop(AskHint, at.Y);
+        AskHint.Visibility = Visibility.Visible;
+    }
+
     void ListSurface_SizeChanged(object sender, SizeChangedEventArgs e) { if (e.WidthChanged) PlaceListBackdrop(); }
 
     /// <summary>On the app screen the card widens (and, through the taller grid, grows) to show more apps.</summary>
     void SyncCardWidth()
     {
-        double w = AppGrid.Visibility == Visibility.Visible || _terminalOpen || _aiOpen ? AppCardWidth : _clipMode ? ClipCardWidth : PillWidth;
-        if (!IsVisible) { ListSurface.BeginAnimation(WidthProperty, null); ListSurface.Width = w; return; }
+        double w = AppGrid.Visibility == Visibility.Visible || _terminalOpen ? AppCardWidth : _clipMode ? ClipCardWidth : PillWidth;
+        if (!IsVisible || !UiMotion.Enabled) { ListSurface.BeginAnimation(WidthProperty, null); ListSurface.Width = w; return; }
         ListSurface.BeginAnimation(WidthProperty, Anim(null, w, 260, new CubicEase { EasingMode = EasingMode.EaseOut }));
     }
 
@@ -389,7 +479,7 @@ public partial class MainWindow : Window
     {
         if (!e.HeightChanged) return;
         double h = e.NewSize.Height;
-        if (!IsVisible)
+        if (!IsVisible || !UiMotion.Enabled)
         {
             ListSurface.BeginAnimation(HeightProperty, null);
             ListSurface.BeginAnimation(OpacityProperty, null);
@@ -419,7 +509,6 @@ public partial class MainWindow : Window
         Disarm();
         ClosePreview();
         CloseTerminal();
-        CloseAi();
         if (AppCatalog.IsCatalogQuery(Query.Text))
         {
             _cts?.Cancel();
@@ -520,12 +609,14 @@ public partial class MainWindow : Window
         if (_armedKey is not null && !ordered.Exists(i => i.Result.Key == _armedKey)) _armedKey = null;
 
         if (ordered.Exists(i => i.Result.Action == ActionType.Update)) _ = CheckForUpdateAsync();
-        if (ordered.Exists(i => i.Result.Action == ActionType.AskAi)) _ = _ai.WarmUpAsync().ContinueWith(t => { if (t.IsFaulted) Log.Error("ai warm-up failed", t.Exception!.GetBaseException()); }); // a question is coming: load the model now
+        if (ordered.Exists(i => i.Result.Action == ActionType.AskAi)) AskAiWarmUp(); // a question is coming: load the model now
+        _askHintWanted = ordered.Count > 0 && ordered[0].Result.Action == ActionType.AskAi;
+        SyncCaret();
 
         bool any = _items.Count > 0;
         SetClipMode(any && ordered.TrueForAll(i => i.Result.Kind == ResultKind.Clipboard));
         Results.Visibility = Footer.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
-        if (_previewOpen || _terminalOpen || _aiOpen) Results.Visibility = Visibility.Collapsed; // a later file stage while the preview or terminal is open
+        if (_previewOpen || _terminalOpen) Results.Visibility = Visibility.Collapsed; // a later file stage while the preview or terminal is open
         if (!any) return;
         int index = selectedKey is null ? 0 : Math.Max(0, ordered.FindIndex(i => i.Result.Key == selectedKey));
         Select(index, disarm: false);
@@ -565,7 +656,7 @@ public partial class MainWindow : Window
     {
         if (_clipMode == on) return;
         _clipMode = on;
-        Results.MaxHeight = on ? AppGrid.Height : 500;
+        Results.MaxHeight = Math.Min(on ? AppGrid.Height : 500, _roomCap);
         Results.Height = on ? AppGrid.Height : double.NaN;
         PreviewPanel.Height = on ? AppGrid.Height - 20 : 440;
         SyncCardWidth();
@@ -702,9 +793,8 @@ public partial class MainWindow : Window
         var mods = Keyboard.Modifiers;
         // Another key while Space is still down: the Space was a tap, so it goes in first to keep the typing order.
         if (_holding && e.Key != Key.Space) FinishHold();
-        // Alt+. : Quicklight settings. Alt+Shift+. : Everything's own settings (indexed folders and drives, exclusions).
-        // With Alt held WPF reports Key.System.
-        if (e.Key == Key.System && e.SystemKey == Key.OemPeriod)
+        // Ctrl+, : Quicklight settings. Ctrl+Shift+, : Everything's own settings (indexed folders and drives, exclusions).
+        if (e.Key == Key.OemComma && mods.HasFlag(ModifierKeys.Control) && !mods.HasFlag(ModifierKeys.Alt))
         {
             if (mods.HasFlag(ModifierKeys.Shift)) _ = OpenEverythingOptionsAsync();
             else
@@ -781,7 +871,7 @@ public partial class MainWindow : Window
                 if (Selected is { } item) Execute(item);
                 e.Handled = true; break;
             case Key.Escape:
-                if (_terminalOpen || _aiOpen) HideLauncher(); // the first Esc (in the terminal or AI input) already moved here; this one closes
+                if (_terminalOpen) HideLauncher(); // the first Esc (in the terminal input) already moved here; this one closes
                 else if (_updateBusy && _updateCts is { IsCancellationRequested: false } updating) updating.Cancel(); // "Esc로 취소"
                 else if (_armedKey is not null) Disarm();
                 else if (_typeAhead.Length > 0) ClearTypeAhead();
@@ -1022,7 +1112,7 @@ public partial class MainWindow : Window
         if (_glassAt.TryGetValue(list, out var was) && was == at) return;
         _glassAt[list] = at;
 
-        bool slide = glass.Visibility == Visibility.Visible;
+        bool slide = glass.Visibility == Visibility.Visible && UiMotion.Enabled;
         glass.Visibility = Visibility.Visible;
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut }; // about CSS "transition: all .3s ease"
         void To(DependencyProperty p, double v)
@@ -1078,7 +1168,7 @@ public partial class MainWindow : Window
         var r = item.Result;
         if (r.Action == ActionType.None) return; // informational row
         if (r.Action == ActionType.Update) { _ = RunUpdateAsync(); return; }
-        if (r.Action == ActionType.AskAi) { _recent.Add(Query.Text); OpenAi(r.Target); return; }
+        if (r.Action == ActionType.AskAi) { _recent.Add(Query.Text); AskAi(r.Target); return; }
         if (r.Action == ActionType.Terminal) { _recent.Add(Query.Text); OpenTerminal(r.Target); return; }
         if (r.Action == ActionType.Expand)
         {
@@ -1291,7 +1381,6 @@ public partial class MainWindow : Window
                 : IsGrid ? "Space / Esc  닫기" : "Space / Esc  닫기      ↑↓  다른 항목 미리보기";
             return;
         }
-        if (_aiOpen) { FooterText.Text = "↵  보내기      Esc  검색창으로      Esc 두 번  닫기"; return; }
         if (_terminalOpen) { FooterText.Text = "↵  실행      Ctrl+C  중단      Esc  검색창으로      Esc 두 번  닫기"; return; }
         if (Selected is not { } item) { FooterText.Text = ""; return; }
         var r = item.Result;
@@ -1311,7 +1400,7 @@ public partial class MainWindow : Window
             ActionType.SwitchWindow => "창으로 전환",
             ActionType.Kill => "종료 (두 번)",
             ActionType.Terminal => "터미널에서 실행",
-            ActionType.AskAi => "AI에게 묻기",
+            ActionType.AskAi => "Qutra에게 묻기",
             _ => r.Kind switch
             {
                 ResultKind.App => "실행",
@@ -1331,96 +1420,35 @@ public partial class MainWindow : Window
 
     // ---------- mini terminal ----------
 
-    // ---------- local AI chat ----------
+    // ---------- local AI ----------
 
-    readonly AiSession _ai = new();
-    bool _aiOpen, _aiBusy;
-    bool _aiNew; // the next question starts a new conversation
-    CancellationTokenSource? _aiCts;
+    /// <summary>Set by the app: the AI side (conversations, the answer panel). Null until it is created.</summary>
+    public Siri.AiHost? Ai { get; set; }
+    bool _handingOffToAi;
 
-    void OpenAi(string question)
+    void AskAiWarmUp() => _ = Ai?.Session.WarmUpAsync().ContinueWith(t => { if (t.IsFaulted) Log.Error("ai warm-up failed", t.Exception!.GetBaseException()); });
+
+    /// <summary>The question leaves the launcher: its capsule closes and the status capsule takes its place on screen.</summary>
+    void AskAi(string question)
     {
-        ClosePreview();
-        CloseTerminal();
-        _aiOpen = true;
-        _aiNew = true;
-        Results.Visibility = AppGrid.Visibility = Visibility.Collapsed;
-        AiPanel.Visibility = Visibility.Visible;
-        Footer.Visibility = Visibility.Visible;
-        UpdateFooter();
-        SyncCardWidth();
-        AiInput.Focus();
-        Keyboard.Focus(AiInput);
-        _ = AskAiAsync(question);
-    }
-
-    void CloseAi()
-    {
-        if (!_aiOpen) return;
-        _aiOpen = _aiBusy = false;
-        _aiCts?.Cancel();
-        _aiCts = null;
-        AiPanel.Visibility = Visibility.Collapsed;
-        AiOutput.Clear();
-        AiInput.Clear();
-        AiInput.IsReadOnly = false;
-        AiBusy.Visibility = Visibility.Collapsed;
-        if (IsGrid) AppGrid.Visibility = Visibility.Visible;
-        else Results.Visibility = _items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        SyncCardWidth();
-        UpdateFooter();
-    }
-
-    void AiWrite(string text)
-    {
-        AiOutput.AppendText(text);
-        AiOutput.ScrollToEnd();
-    }
-
-    async Task AskAiAsync(string text)
-    {
-        if (_aiBusy) return;
-        var cts = _aiCts = new CancellationTokenSource();
-        _aiBusy = true;
-        AiInput.IsReadOnly = true;
-        AiBusy.Visibility = Visibility.Visible;
-        AiWrite($"나> {text}\n");
+        if (Ai is null) return;
+        var origin = BarScreenRect();
+        var returnTo = _previousForeground;
+        _handingOffToAi = true;
         try
         {
-            var answer = await _ai.AskAsync(text, _aiNew, cts.Token);
-            _aiNew = false;
-            AiWrite($"AI> {answer}\n\n");
+            if (Ai.Ask(question, origin, returnTo, Tint.Background)) HideLauncher(aiHandoff: true);
+            else if (Ai.IsBusy) Status.Text = "Qutra가 아직 답하는 중입니다"; // Enter must not look dead
         }
-        catch (OperationCanceledException) { return; } // closed meanwhile
-        catch (Exception ex)
-        {
-            Log.Error("ai failed", ex);
-            AiWrite($"[오류] {ex.Message}\n\n");
-        }
-        finally
-        {
-            if (_aiCts == cts)
-            {
-                _aiBusy = false;
-                AiInput.IsReadOnly = false;
-                AiBusy.Visibility = Visibility.Collapsed;
-            }
-        }
+        finally { _handingOffToAi = false; }
     }
 
-    void AiInput_PreviewKeyDown(object sender, KeyEventArgs e)
+    /// <summary>The search capsule's rectangle on screen, in physical pixels.</summary>
+    Rect BarScreenRect()
     {
-        switch (e.Key)
-        {
-            case Key.Escape: // back to the search box; the next Esc there closes the launcher
-                Query.Focus();
-                Keyboard.Focus(Query);
-                e.Handled = true; break;
-            case Key.Enter when AiInput.Text.Trim() is { Length: > 0 } text && !_aiBusy:
-                AiInput.Clear();
-                _ = AskAiAsync(text);
-                e.Handled = true; break;
-        }
+        var scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        var p = BarPanel.PointToScreen(new Point(0, 0));
+        return new Rect(p.X, p.Y, BarPanel.ActualWidth * scale, BarPanel.ActualHeight * scale);
     }
 
     bool _terminalOpen;
@@ -1579,6 +1607,7 @@ public partial class MainWindow : Window
     {
         _holding = true;
         _holdTimer.Start();
+        if (!UiMotion.Enabled) return;
         var list = ActiveList;
         if (list.ItemContainerGenerator.ContainerFromItem(item) is not ListBoxItem row) return;
         _pulledRow = row;
@@ -1595,7 +1624,7 @@ public partial class MainWindow : Window
             return a;
         }
         scale.BeginAnimation(ScaleTransform.ScaleXProperty, Pull(1.04));
-        scale.BeginAnimation(ScaleTransform.ScaleYProperty, Pull(1.12));
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, Pull(1.06));
     }
 
     void CancelHold()
@@ -1605,14 +1634,14 @@ public partial class MainWindow : Window
         SpringBack();
     }
 
-    /// <summary>Lets go of the pulled row: it snaps back and wobbles like a released spring.</summary>
+    /// <summary>Returns the held row to its resting size.</summary>
     void SpringBack()
     {
         if (_pulledRow?.RenderTransform is not ScaleTransform scale) return;
         _pulledRow = null;
-        var ease = new ElasticEase { Oscillations = 2, Springiness = 5, EasingMode = EasingMode.EaseOut };
-        scale.BeginAnimation(ScaleTransform.ScaleXProperty, Anim(null, 1, 550, ease));
-        scale.BeginAnimation(ScaleTransform.ScaleYProperty, Anim(null, 1, 550, ease));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, Anim(null, 1, UiMotion.Standard, ease));
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, Anim(null, 1, UiMotion.Standard, ease));
     }
 
     void OpenPreview()
@@ -1632,13 +1661,12 @@ public partial class MainWindow : Window
         ActiveList.Visibility = Visibility.Collapsed;
         PreviewPanel.Visibility = Visibility.Visible;
         UpdateFooter();
-        if (!wasOpen)
+        if (!wasOpen && UiMotion.Enabled)
         {
-            // Pops out with a little overshoot: the spring that was being pulled.
-            var pop = new BackEase { Amplitude = 0.4, EasingMode = EasingMode.EaseOut };
-            PreviewScale.BeginAnimation(ScaleTransform.ScaleXProperty, Anim(0.9, 1, 340, pop));
-            PreviewScale.BeginAnimation(ScaleTransform.ScaleYProperty, Anim(0.9, 1, 340, pop));
-            PreviewPanel.BeginAnimation(OpacityProperty, Anim(0, 1, 180, new CubicEase { EasingMode = EasingMode.EaseOut }));
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            PreviewScale.BeginAnimation(ScaleTransform.ScaleXProperty, Anim(0.985, 1, UiMotion.Standard, ease));
+            PreviewScale.BeginAnimation(ScaleTransform.ScaleYProperty, Anim(0.985, 1, UiMotion.Standard, ease));
+            PreviewPanel.BeginAnimation(OpacityProperty, Anim(0, 1, UiMotion.Standard, ease));
         }
         if (item.Result.App is { } app) ShowAppDetails(app);
         else if (item.IsClip) _ = ShowClipAsync(item, generation);

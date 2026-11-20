@@ -22,7 +22,7 @@ public static class QuestionDetector
         "장단점", "순서", "하는법", "영어로", "한국어로", "일본어로", "중국어로", "한글로",
     ];
 
-    static readonly string[] WhWords = ["what", "why", "how", "who", "whom", "whose", "when", "where", "which"];
+    static readonly string[] WhWords = ["what", "why", "how", "who", "whom", "whose", "when", "where", "which", "what's", "how's", "who's", "where's", "whats"];
 
     // Yes/no openers are also the first word of names ("Do Not Disturb", "Will Smith"), so they need a longer sentence.
     static readonly string[] AuxWords =
@@ -48,7 +48,8 @@ public static class QuestionDetector
         if (AuxWords.Contains(first) && words.Length >= 4) return true;
         if (EnglishRequests.Any(r => t.StartsWith(r + " ", StringComparison.OrdinalIgnoreCase))) return true;
 
-        if (KoreanEndings.Any(e => last.EndsWith(e, StringComparison.Ordinal))) return true;
+        // "맥 미니", "KEB 하나": a short ending after two words is more often a name than a question.
+        if (KoreanEndings.Any(e => last.EndsWith(e, StringComparison.Ordinal) && (e is not ("니" or "하나") || words.Length >= 3))) return true;
         if (KoreanTopicEnds.Any(e => last.EndsWith(e, StringComparison.Ordinal))) return true;
         // Polite Korean sentence ending: "노트북 하나 사고 싶어요".
         if (IsHangul(last) && last.EndsWith('요')) return true;

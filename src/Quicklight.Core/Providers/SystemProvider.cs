@@ -47,6 +47,16 @@ public sealed class SystemProvider : IResultProvider
         S("복구", "ms-settings:recovery", "recovery", "초기화", "reset this pc"),
         S("설정", "ms-settings:", "settings", "windows 설정"),
 
+        A("사진", "ms-photos:", "photos", "photo", "갤러리", "이미지 보기"),
+        A("시계", "ms-clock:", "clock", "알람", "alarm", "타이머", "timer", "스톱워치", "stopwatch"),
+        A("일정", "outlookcal:", "calendar", "캘린더", "달력"),
+        A("메일 쓰기", "mailto:", "mail", "email", "이메일", "메일", "새 메일"),
+        A("날씨", "msnweather:", "weather"),
+        A("Microsoft Store", "ms-windows-store:", "store", "스토어", "앱 스토어"),
+        A("캡처 도구", "ms-screenclip:", "snipping tool", "screenshot", "스크린샷", "화면 캡처", "캡처"),
+        A("계산기", "calculator:", "calculator", "calc"),
+        A("지도", "bingmaps:", "maps", "map"),
+
         T("제어판", "control.exe", null, "control panel", "control"),
         T("장치 관리자", "devmgmt.msc", null, "device manager", "드라이버", "driver"),
         T("디스크 관리", "diskmgmt.msc", null, "disk management", "파티션", "partition"),
@@ -69,6 +79,7 @@ public sealed class SystemProvider : IResultProvider
     ];
 
     static Item S(string title, string uri, params string[] aliases) => new(title, aliases, ResultKind.Setting, uri, Subtitle: "Windows 설정");
+    static Item A(string title, string uri, params string[] aliases) => new(title, aliases, ResultKind.Setting, uri, Subtitle: "Windows 앱");
     static Item T(string title, string exe, string? args, params string[] aliases) => new(title, aliases, ResultKind.Setting, exe, args, Subtitle: "Windows 도구");
     static Item C(string title, string id, bool confirm, params string[] aliases) =>
         new(title, aliases, ResultKind.Command, id, Confirm: confirm, Subtitle: confirm ? "시스템 명령 · Enter 두 번으로 실행" : "시스템 명령");

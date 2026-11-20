@@ -22,7 +22,7 @@ public sealed class AskAiProvider(Func<bool>? available = null) : IResultProvide
             new SearchResult
             {
                 Title = query.Text,
-                Subtitle = "AI에게 묻기",
+                Subtitle = "Qutra에게 묻기",
                 Kind = ResultKind.Command,
                 Target = query.Text,
                 Action = ActionType.AskAi,

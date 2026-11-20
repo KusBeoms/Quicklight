@@ -66,7 +66,7 @@ public sealed class SearchEngine : IDisposable
         if (includeWindows) // the launcher; MCP clients get neither the window switcher nor a row that opens the launcher's AI chat
         {
             _providers.Add(new WindowProvider());
-            _providers.Add(new Ai.AskAiProvider());
+            _providers.Add(new Ai.AskAiProvider(() => settings.AiEnabled && Ai.AiModel.IsAvailable));
         }
         if (everything is not null) _providers.Add(new EverythingProvider(everything, settings));
         Rates = rates;

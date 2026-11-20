@@ -1,0 +1,59 @@
+<Window x:Class="Quicklight.Siri.AnswerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:siri="clr-namespace:Quicklight.Siri"
+        Title="Quicklight" Width="200" Height="100"
+        WindowStyle="None" AllowsTransparency="False" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
+        Background="Transparent" FontFamily="{StaticResource UiFont}" ShowActivated="True"
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Display"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <!-- Siri's reply: a small black status capsule (ring of dots and one word) that grows into a floating glass panel
+         with the conversation. The margin around leaves room for the shadow. -->
+    <Grid x:Name="Shell" Margin="28">
+        <Grid x:Name="Surface">
+            <Grid.Effect>
+                <DropShadowEffect BlurRadius="30" ShadowDepth="8" Direction="270" Opacity="0.45" />
+            </Grid.Effect>
+            <Border x:Name="PanelBg" CornerRadius="34" BorderThickness="1"
+                    Background="{DynamicResource AnswerSurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" />
+            <Border x:Name="CapsuleBg" CornerRadius="44" BorderThickness="1"
+                    Background="{DynamicResource BarTintBrush}" BorderBrush="{DynamicResource BarRimBrush}" />
+        </Grid>
+
+        <!-- The question as the launcher's capsule showed it; fades out as the capsule gathers into the status pill. -->
+        <Grid ClipToBounds="True" IsHitTestVisible="False">
+            <Grid x:Name="Question" VerticalAlignment="Top" Margin="30,0,28,0" Opacity="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="25" Opacity="0.7"
+                           Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,16,0" />
+                <TextBlock x:Name="QuestionText" Grid.Column="1" FontSize="26" Foreground="{DynamicResource TextBrush}"
+                           VerticalAlignment="Center" Margin="2,0,0,0" TextTrimming="CharacterEllipsis" />
+            </Grid>
+
+            <Border x:Name="Status" Height="68" Padding="26,0" HorizontalAlignment="Center" VerticalAlignment="Top" Visibility="Collapsed" Opacity="0" />
+        </Grid>
+
+        <Grid x:Name="Panel" Opacity="0" Visibility="Collapsed">
+            <!-- Drag the panel by its top edge, as by a title bar. -->
+            <Border x:Name="Header" Height="52" VerticalAlignment="Top" Background="Transparent" MouseLeftButtonDown="Header_MouseLeftButtonDown" />
+            <siri:ConversationView x:Name="Chat" Margin="0,52,0,0" />
+            <Button x:Name="CloseButton" Style="{StaticResource SiriCircleButton}" Content="&#xE711;" ToolTip="닫기"
+                    HorizontalAlignment="Left" VerticalAlignment="Top" Margin="16,14,0,0" Click="Close_Click" />
+            <Button x:Name="ExpandButton" Style="{StaticResource SiriCircleButton}" Content="&#xE740;" ToolTip="대화 앱에서 열기"
+                    HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,14,16,0" Click="Expand_Click" />
+        </Grid>
+
+        <!-- Resize handles: the grabbed edge or corner follows the pointer, the opposite side stays. -->
+        <Grid x:Name="Grips" Visibility="Collapsed">
+            <Thumb Tag="L" Width="8" HorizontalAlignment="Left" Margin="0,40" Cursor="SizeWE" Opacity="0" DragDelta="Grip_DragDelta" />
+            <Thumb Tag="R" Width="8" HorizontalAlignment="Right" Margin="0,40" Cursor="SizeWE" Opacity="0" DragDelta="Grip_DragDelta" />
+            <Thumb Tag="B" Height="8" VerticalAlignment="Bottom" Margin="40,0" Cursor="SizeNS" Opacity="0" DragDelta="Grip_DragDelta" />
+            <Thumb Tag="BL" Width="24" Height="24" HorizontalAlignment="Left" VerticalAlignment="Bottom" Cursor="SizeNESW" Opacity="0" DragDelta="Grip_DragDelta" />
+            <Thumb Tag="BR" Width="24" Height="24" HorizontalAlignment="Right" VerticalAlignment="Bottom" Cursor="SizeNWSE" Opacity="0" DragDelta="Grip_DragDelta" />
+        </Grid>
+    </Grid>
+</Window>

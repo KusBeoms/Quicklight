@@ -10,7 +10,7 @@ public sealed class TrayIcon : IDisposable
     readonly Forms.NotifyIcon _icon;
     readonly QuicklightSettings _settings;
 
-    public TrayIcon(QuicklightSettings settings, Action show, Action openSettings, Action reload, Action exit, Action installEverything)
+    public TrayIcon(QuicklightSettings settings, Action show, Action openSettings, Action reload, Action exit, Action installEverything, Action openAi)
     {
         _settings = settings;
         var iconStream = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/quicklight.ico"))!.Stream;
@@ -25,6 +25,7 @@ public sealed class TrayIcon : IDisposable
         var open = menu.Items.Add($"열기 ({settings.Hotkey})", null, (_, _) => show());
         open.Font = new System.Drawing.Font(open.Font, System.Drawing.FontStyle.Bold);
         menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add("Qutra 대화 기록…", null, (_, _) => openAi());
         menu.Items.Add("설정…", null, (_, _) => openSettings());
         menu.Items.Add("설정 다시 불러오기", null, (_, _) => reload());
         menu.Items.Add("로그 보기", null, (_, _) => OpenFile(Log.FilePath));

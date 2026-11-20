@@ -18,7 +18,7 @@ public sealed class ResultItem(SearchResult result, string group) : INotifyPrope
 
     public const string HeroGroup = "최상위 결과";
 
-    public double HeroFontSize => 34;
+    public double HeroFontSize => 40;
 
     /// <summary>What Enter does on the card.</summary>
     public string HeroHint => "↵ 복사";

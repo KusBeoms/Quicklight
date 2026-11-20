@@ -26,7 +26,7 @@ public static class Theme
             Set(res, "SolidPanelBrush", Color.FromRgb(0x26, 0x26, 0x2B));
             Set(res, "TextBrush", Color.FromRgb(0xF2, 0xF2, 0xF4));
             Set(res, "SubtleTextBrush", Color.FromArgb(0xA8, 0xF2, 0xF2, 0xF4));
-            Set(res, "PlaceholderBrush", Color.FromArgb(0x70, 0xF2, 0xF2, 0xF4));
+            Set(res, "PlaceholderBrush", Color.FromArgb(0xA0, 0xF2, 0xF2, 0xF4));
             Set(res, "HeaderBrush", Color.FromArgb(0x90, 0xF2, 0xF2, 0xF4));
             Set(res, "SeparatorBrush", Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF));
             Set(res, "GlyphBackBrush", Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF));
@@ -40,7 +40,7 @@ public static class Theme
             Set(res, "SolidPanelBrush", Color.FromRgb(0xF7, 0xF7, 0xF9));
             Set(res, "TextBrush", Color.FromRgb(0x1A, 0x1A, 0x1E));
             Set(res, "SubtleTextBrush", Color.FromArgb(0xA0, 0x1A, 0x1A, 0x1E));
-            Set(res, "PlaceholderBrush", Color.FromArgb(0x70, 0x1A, 0x1A, 0x1E));
+            Set(res, "PlaceholderBrush", Color.FromArgb(0xA0, 0x1A, 0x1A, 0x1E));
             Set(res, "HeaderBrush", Color.FromArgb(0x88, 0x1A, 0x1A, 0x1E));
             Set(res, "SeparatorBrush", Color.FromArgb(0x1E, 0x00, 0x00, 0x00));
             Set(res, "GlyphBackBrush", Color.FromArgb(0x16, 0x00, 0x00, 0x00));
@@ -52,6 +52,49 @@ public static class Theme
 
         // The selection's tint over the magnified backdrop: lighter and clearer than the panel's own tint.
         Set(res, "GlassFillBrush", IsDark ? Color.FromArgb(0x70, 0x3A, 0x3A, 0x42) : Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF));
+    }
+
+    /// <summary>
+    /// The dark "ink" glass of Siri's capsule and answer panel. Apple draws these dark on a light desktop too, so a window
+    /// that uses them puts these brushes in its own resources, over the system theme's (values from the Siri AI spec).
+    /// </summary>
+    public static void ApplyInk(ResourceDictionary res)
+    {
+        Set(res, "PanelBrush", Color.FromArgb(0xF0, 0x05, 0x05, 0x06)); // black, the backdrop only faintly through
+        Set(res, "MenuBrush", Color.FromArgb(0xFA, 0x2A, 0x2A, 0x30));
+        Set(res, "SolidPanelBrush", Color.FromArgb(0xFC, 0x05, 0x05, 0x06));
+        // The search capsule: black at the top, the blurred screen showing through towards the bottom (Spotlight's "Search or Ask").
+        var bar = new LinearGradientBrush(new GradientStopCollection
+        {
+            new GradientStop(Color.FromArgb(0xFF, 0x00, 0x00, 0x00), 0),
+            new GradientStop(Color.FromArgb(0xF4, 0x04, 0x04, 0x05), 0.5),
+            new GradientStop(Color.FromArgb(0xB4, 0x14, 0x12, 0x10), 1),
+        }, 90);
+        bar.Freeze();
+        res["BarTintBrush"] = bar;
+        // A thin light rim, strongest along the bottom edge.
+        var rim = new LinearGradientBrush(new GradientStopCollection
+        {
+            new GradientStop(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF), 0),
+            new GradientStop(Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF), 0.5),
+            new GradientStop(Color.FromArgb(0x78, 0xFF, 0xFF, 0xFF), 1),
+        }, 90);
+        rim.Freeze();
+        res["BarRimBrush"] = rim;
+        Set(res, "TextBrush", Color.FromRgb(0xF5, 0xF5, 0xF7));
+        Set(res, "SubtleTextBrush", Color.FromRgb(0xAB, 0xAB, 0xB1));
+        Set(res, "PlaceholderBrush", Color.FromArgb(0xB8, 0xAB, 0xAB, 0xB1));
+        Set(res, "HeaderBrush", Color.FromArgb(0xA0, 0xF5, 0xF5, 0xF7));
+        Set(res, "SeparatorBrush", Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
+        Set(res, "GlyphBackBrush", Color.FromArgb(0x29, 0xFF, 0xFF, 0xFF));
+        Set(res, "HoverBrush", Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF));
+        Set(res, "BorderBrush", Color.FromArgb(0x29, 0xFF, 0xFF, 0xFF));
+        Set(res, "GlassFillBrush", Color.FromArgb(0x70, 0x3A, 0x3A, 0x42));
+        var answer = new LinearGradientBrush(Color.FromRgb(0x26, 0x26, 0x2B), Color.FromRgb(0x1A, 0x1A, 0x1E), 90);
+        answer.Freeze();
+        res["AnswerSurfaceBrush"] = answer;
+        Set(res, "AccentBrush", AccentColor());
+        Set(res, "SelectedTextBrush", Colors.White);
     }
 
     static void Set(ResourceDictionary res, string key, Color c)

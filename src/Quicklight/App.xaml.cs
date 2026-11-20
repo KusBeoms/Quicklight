@@ -2,6 +2,7 @@ using System.Windows;
 using Quicklight.Core;
 using Quicklight.Core.Everything;
 using Quicklight.Core.Update;
+using Quicklight.Siri;
 
 namespace Quicklight;
 
@@ -9,9 +10,12 @@ public partial class App : Application
 {
     const string MutexName = @"Local\Quicklight.SingleInstance";
     const string ShowEventName = @"Local\Quicklight.Show";
+    const string AskEventName = @"Local\Quicklight.Ask";
 
     Mutex? _mutex;
     EventWaitHandle? _showEvent;
+    EventWaitHandle? _askEvent;
+    AiHost? _ai;
     SearchEngine? _engine;
     UsageStore? _usage;
     MainWindow? _window;
@@ -42,10 +46,18 @@ public partial class App : Application
         else if (!first && Installer.StopOtherInstalls()) first = WaitForMutex(_mutex, TimeSpan.FromSeconds(10));
         if (!first)
         {
-            _showEvent.Set();
+            // From Explorer's "Quicklight에게 묻기": hand the files over (one process starts per selected file).
+            if (ArgAfter(e.Args, "--ask") is { } file)
+            {
+                AskQueue.Enqueue(file);
+                _askEvent = new EventWaitHandle(false, EventResetMode.AutoReset, AskEventName);
+                _askEvent.Set();
+            }
+            else _showEvent.Set();
             Shutdown();
             return;
         }
+        _askEvent = new EventWaitHandle(false, EventResetMode.AutoReset, AskEventName);
 
         Installer.Register();
         DispatcherUnhandledException += (_, args) =>
@@ -65,12 +77,16 @@ public partial class App : Application
         _updates = new UpdateService(_settings);
         _window = new MainWindow(_engine, _settings, _updates, clipboard) { Pinned = e.Args.Contains("--pinned") };
         _window.InitializeHidden();
+        _ai = new AiHost(_settings, () => _window.Handle);
+        _window.Ai = _ai;
+        ScreenTools.PurgeOldCaptures();
 
         _hotkey = new HotkeyManager(_window.Handle, () => _window.Toggle());
         RegisterHotkey();
 
         _tray = new TrayIcon(_settings, show: () => _window.ShowLauncher(), openSettings: OpenSettings, reload: ReloadSettings, exit: () => Shutdown(),
-            installEverything: () => _ = SetUpEverythingAsync(userAsked: true));
+            installEverything: () => _ = SetUpEverythingAsync(userAsked: true), openAi: () => _ai.ShowLast());
+        SyncExplorerMenu();
         Autostart.Sync(_settings.LaunchAtStartup);
 
         var listener = new Thread(() =>
@@ -79,6 +95,19 @@ public partial class App : Application
                 Dispatcher.BeginInvoke(() => _window.ShowLauncher());
         }) { IsBackground = true, Name = "Show listener" };
         listener.Start();
+
+        // Files sent by "Quicklight에게 묻기": wait a moment for the rest of a multi-selection, then ask once.
+        var askListener = new Thread(() =>
+        {
+            while (_askEvent!.WaitOne())
+            {
+                Thread.Sleep(600);
+                var files = AskQueue.Drain();
+                if (files.Count > 0) Dispatcher.BeginInvoke(() => _ai?.Compose(files, null, IntPtr.Zero));
+            }
+        }) { IsBackground = true, Name = "Ask listener" };
+        askListener.Start();
+        if (ArgAfter(e.Args, "--ask") is { } first1) { AskQueue.Enqueue(first1); _askEvent.Set(); }
 
         // Follow Windows when it switches between light and dark.
         Microsoft.Win32.SystemEvents.UserPreferenceChanged += (_, args) =>
@@ -189,7 +218,20 @@ public partial class App : Application
         _window?.ApplyBackdrop();
         _hotkey?.Unregister();
         RegisterHotkey();
+        SyncExplorerMenu();
+        _ai?.ApplySettings();
         Autostart.Sync(_settings.LaunchAtStartup);
+    }
+
+    /// <summary>The Explorer right-click entry follows the setting (a per-user registry key; nothing is written unless it is on).</summary>
+    void SyncExplorerMenu()
+    {
+        try
+        {
+            if (_settings.ExplorerMenu && _settings.AiEnabled && Environment.ProcessPath is { } exe) Core.Integration.ContextMenuRegistration.Register(exe);
+            else if (Core.Integration.ContextMenuRegistration.IsRegistered()) Core.Integration.ContextMenuRegistration.Unregister();
+        }
+        catch (Exception ex) { Log.Error("explorer menu failed", ex); }
     }
 
     public void OpenSettings() => SettingsWindow.Open(_settings, ApplySettings);
@@ -197,6 +239,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _hotkey?.Dispose();
+        _ai?.Dispose();
         _tray?.Dispose();
         _usage?.Flush(); // a save queued by the last launch must not be lost when quitting right after
         _window?.FlushRecent();
