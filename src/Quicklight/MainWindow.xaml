@@ -250,13 +250,44 @@
             </Setter>
         </Style>
         <DropShadowEffect x:Key="SurfaceShadow" BlurRadius="30" ShadowDepth="8" Opacity="0.38" Direction="270" />
+
+        <!-- A scope chip under the search box; the checked one is the scope in use. -->
+        <Style x:Key="ChipStyle" TargetType="ToggleButton">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Margin" Value="5,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bg" CornerRadius="18" Padding="18,8" Background="{DynamicResource SolidPanelBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="14" ShadowDepth="3" Direction="270" Opacity="0.3" />
+                            </Border.Effect>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource MenuBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource SelectedTextBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <!-- Two surfaces: the search pill and, below it, a rounded card with the results. Each has its own shadow,
          blurred backdrop, tint and outline. The margin leaves room for the drop shadow. Opacity is animated on show
          and hide; the blur only on the content, so the outlines stay crisp. -->
     <StackPanel x:Name="Shell" Margin="24" VerticalAlignment="Top">
-        <Grid x:Name="BarGrid" MinHeight="96" Width="720" SizeChanged="BarGrid_SizeChanged">
+        <Grid x:Name="BarGrid" MinHeight="96" Width="720" SizeChanged="BarGrid_SizeChanged" MouseEnter="ScopeBar_MouseChanged" MouseLeave="ScopeBar_MouseChanged">
             <Border x:Name="BarShape" CornerRadius="48" Background="{DynamicResource SolidPanelBrush}" Effect="{StaticResource SurfaceShadow}" />
             <Grid x:Name="BarPanel">
                 <Grid.Clip>
@@ -293,7 +324,7 @@
                         <!-- "— AI에게 물어보기": right after a typed question while asking is the top result, like Spotlight's "— Siri에게 물어보기". -->
                         <TextBlock x:Name="AskHint" Text="— Qutra에게 묻기" FontSize="29" Foreground="{DynamicResource PlaceholderBrush}" Visibility="Collapsed" />
                         <!-- Neon: a wide blurred halo under a bright core that has its own glow. -->
-                        <Rectangle x:Name="CaretGlow" Width="8" RadiusX="4" RadiusY="4" Fill="#7FCBFF" Visibility="Collapsed">
+                        <Rectangle x:Name="CaretGlow" Width="8" RadiusX="4" RadiusY="4" Fill="White" Visibility="Collapsed">
                             <Rectangle.Effect>
                                 <BlurEffect Radius="10" KernelType="Gaussian" />
                             </Rectangle.Effect>
@@ -301,9 +332,9 @@
                                 <TranslateTransform x:Name="CaretGlowMove" />
                             </Rectangle.RenderTransform>
                         </Rectangle>
-                        <Rectangle x:Name="Caret" Width="2.5" RadiusX="1.25" RadiusY="1.25" Fill="#F2FAFF" Visibility="Collapsed">
+                        <Rectangle x:Name="Caret" Width="3" RadiusX="1.5" RadiusY="1.5" Fill="White" Visibility="Collapsed">
                             <Rectangle.Effect>
-                                <DropShadowEffect Color="#8FD3FF" BlurRadius="14" ShadowDepth="0" Opacity="1" />
+                                <DropShadowEffect Color="White" BlurRadius="14" ShadowDepth="0" Opacity="1" />
                             </Rectangle.Effect>
                             <Rectangle.RenderTransform>
                                 <TranslateTransform x:Name="CaretMove" />
@@ -320,6 +351,32 @@
             </Grid>
             <Border x:Name="BarOutline" CornerRadius="48" BorderThickness="1" BorderBrush="{DynamicResource BarRimBrush}" IsHitTestVisible="False" />
         </Grid>
+
+        <!-- Apps / files / clipboard (Ctrl+1 / 2 / 4): shown while the pointer is over the search box, and while one is on.
+             The transparent padding touches the capsule, so the pointer can go down to a chip without losing the row. -->
+        <Border x:Name="ScopeBar" Background="Transparent" Padding="0,10,0,0" HorizontalAlignment="Center" Visibility="Collapsed"
+                MouseEnter="ScopeBar_MouseChanged" MouseLeave="ScopeBar_MouseChanged" SizeChanged="ScopeBar_SizeChanged">
+            <StackPanel Orientation="Horizontal">
+                <ToggleButton x:Name="ChipApps" Tag="Apps" Style="{StaticResource ChipStyle}" Click="Chip_Click" AutomationProperties.Name="앱">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="앱" />
+                        <TextBlock Text="Ctrl+1" FontSize="11.5" Opacity="0.55" VerticalAlignment="Center" Margin="8,1,0,0" />
+                    </StackPanel>
+                </ToggleButton>
+                <ToggleButton x:Name="ChipFiles" Tag="Files" Style="{StaticResource ChipStyle}" Click="Chip_Click" AutomationProperties.Name="파일">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="파일" />
+                        <TextBlock Text="Ctrl+2" FontSize="11.5" Opacity="0.55" VerticalAlignment="Center" Margin="8,1,0,0" />
+                    </StackPanel>
+                </ToggleButton>
+                <ToggleButton x:Name="ChipClipboard" Tag="Clipboard" Style="{StaticResource ChipStyle}" Click="Chip_Click" AutomationProperties.Name="클립보드">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="클립보드" />
+                        <TextBlock Text="Ctrl+4" FontSize="11.5" Opacity="0.55" VerticalAlignment="Center" Margin="8,1,0,0" />
+                    </StackPanel>
+                </ToggleButton>
+            </StackPanel>
+        </Border>
 
         <!-- The results card. Its height animates towards the content's; at zero it fades out. On the app screen it widens. -->
         <Grid x:Name="ListSurface" Margin="0,10,0,0" Width="720" Height="0" Opacity="0" HorizontalAlignment="Center" SizeChanged="ListSurface_SizeChanged">

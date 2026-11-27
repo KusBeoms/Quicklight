@@ -6,32 +6,6 @@ namespace Quicklight.Tests;
 public class AppCatalogTests
 {
     [Theory]
-    [InlineData("앱", true)]
-    [InlineData(" app ", true)]
-    [InlineData("Apps", true)]
-    [InlineData("application", true)]
-    [InlineData("애플리케이션", true)]
-    [InlineData("응용프로그램", true)]
-    [InlineData("프로그램", true)]
-    [InlineData("appdata", false)]
-    [InlineData("앱스토어", false)]
-    public void Catalog_keywords(string q, bool expected) => Assert.Equal(expected, AppCatalog.IsCatalogQuery(q));
-
-    [Theory]
-    [InlineData("app apple music", "apple music")]
-    [InlineData("app : apple music", "apple music")]
-    [InlineData("app ; apple music", "apple music")]
-    [InlineData("app, apple music", "apple music")]
-    [InlineData("APP:apple music", "apple music")]
-    [InlineData("앱 멜론", "멜론")]
-    [InlineData("application; code", "code")]
-    [InlineData("apple music", null)] // no separator after the keyword
-    [InlineData("app", null)]
-    [InlineData("app : ", null)]
-    [InlineData("앱스토어", null)]
-    public void Scoped_app_queries(string q, string? rest) => Assert.Equal(rest, AppCatalog.ScopedQuery(q));
-
-    [Theory]
     [InlineData("chrome", "C")]
     [InlineData("카카오톡", "ㅋ")]
     [InlineData("까치", "ㄱ")]

@@ -8,35 +8,21 @@ using WinClipboard = Windows.ApplicationModel.DataTransfer.Clipboard;
 namespace Quicklight;
 
 /// <summary>
-/// "clip", "클립보드", "ㅋㄹ" (+ words to filter): Windows' own clipboard history, the same list as Win+V, newest first.
-/// Enter makes the entry current and pastes it (the launcher does that); Delete removes it from the history.
+/// Windows' own clipboard history, the same list as Win+V, newest first. The launcher lists it in its clipboard
+/// scope (Ctrl+4), the typed text filtering the entries. Enter makes the entry current and pastes it (the launcher does
+/// that); Delete removes it from the history. Not a search provider: the clipboard and its entries stay on the UI thread.
 /// </summary>
-public sealed class ClipboardHistoryProvider : IResultProvider
+public sealed class ClipboardHistoryProvider
 {
-    static readonly string[] Prefixes = ["clip", "클립보드", "ㅋㄹ", "cb"];
-
     // Entries of the last listing by id, for paste/delete, their text, and image thumbnails for the cards.
     readonly Dictionary<string, ClipboardHistoryItem> _items = [];
     readonly Dictionary<string, string> _texts = [];
     readonly Dictionary<string, ImageSource> _thumbnails = [];
 
-    public string Name => "clipboard";
-
-    public async Task<IReadOnlyList<SearchResult>> QueryAsync(QueryContext query, CancellationToken ct)
-    {
-        // A whole word only: "clipchamp" is an app, not the clipboard.
-        var prefix = Prefixes.FirstOrDefault(p => query.Text.Equals(p, StringComparison.OrdinalIgnoreCase)
-                                                  || query.Text.StartsWith(p + " ", StringComparison.OrdinalIgnoreCase));
-        if (prefix is null) return [];
-        var filter = query.Text[prefix.Length..].Trim();
-        // Searches run on the thread pool; the clipboard, its entries and the thumbnails stay on the UI thread as before.
-        var ui = System.Windows.Application.Current.Dispatcher;
-        return ui.CheckAccess() ? await ListAsync(filter, ct) : await ui.InvokeAsync(() => ListAsync(filter, ct)).Task.Unwrap();
-    }
-
     int _listing; // listings await in between, so two can overlap: only the newest one prunes
 
-    async Task<IReadOnlyList<SearchResult>> ListAsync(string filter, CancellationToken ct)
+    /// <summary>The history, newest first, keeping the entries whose text contains <paramref name="filter"/> (all of them when empty). Call on the UI thread.</summary>
+    public async Task<IReadOnlyList<SearchResult>> ListAsync(string filter, CancellationToken ct)
     {
         int listing = ++_listing;
 

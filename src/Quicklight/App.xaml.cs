@@ -80,7 +80,7 @@ public partial class App : Application
         Theme.Apply(Resources, _settings.Theme);
         _usage = new UsageStore(UsageStore.DefaultPath);
         var clipboard = new ClipboardHistoryProvider();
-        _engine = SearchEngine.CreateDefault(_settings, _usage, [clipboard]);
+        _engine = SearchEngine.CreateDefault(_settings, _usage);
         _ = _engine.WarmUpAsync();
 
         _updates = new UpdateService(_settings);

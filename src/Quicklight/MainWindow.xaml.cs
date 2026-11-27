@@ -76,7 +76,7 @@ public partial class MainWindow : Window
         PreviewParts.ItemsSource = _parts;
         Deactivated += (_, _) => { if (!Pinned && !_handingOffToAi) HideLauncher(); };
         // The window reaches the bottom of the screen so the panel can grow inside it; a click beside the panel closes it.
-        MouseDown += (_, e) => { if (!Pinned && e.OriginalSource is Visual v && !BarPanel.IsAncestorOf(v) && !ListPanel.IsAncestorOf(v)) HideLauncher(); };
+        MouseDown += (_, e) => { if (!Pinned && e.OriginalSource is Visual v && !BarPanel.IsAncestorOf(v) && !ListPanel.IsAncestorOf(v) && v != ScopeBar && !ScopeBar.IsAncestorOf(v)) HideLauncher(); };
         Query.SelectionChanged += (_, _) => SyncCaret();
         Query.TextChanged += (_, _) => SyncCaret();
         Query.SizeChanged += (_, _) => SyncCaret();
@@ -172,7 +172,7 @@ public partial class MainWindow : Window
         {
             _previousForeground = NativeUi.Foreground();
             Ai?.CaptureContext(_previousForeground); // before this window takes the focus
-            Placeholder.Text = _settings.AiEnabled && Core.Ai.AiModel.IsAvailable ? "묻거나 검색" : "Quicklight 검색";
+            UpdatePlaceholder();
             Status.Text = ""; // a one-off message (e.g. a launch error) must not outlive the opening it was shown in
         }
 
@@ -234,6 +234,8 @@ public partial class MainWindow : Window
         {
             Hide();
             Query.Clear(); // the next opening starts empty (↑ brings back recent queries)
+            SetScope(Scope.None); // ... in the plain search, without the chips
+            ScopeBar.Visibility = Visibility.Collapsed;
         }
         if (aiHandoff)
         {
@@ -259,7 +261,7 @@ public partial class MainWindow : Window
             _backdropPad = pad / scale;
             Canvas.SetLeft(Backdrop, -_backdropPad - (ShellWidth - PillWidth) / 2);
             Canvas.SetTop(Backdrop, -_backdropPad);
-            Canvas.SetTop(ListBackdrop, -_backdropPad - (BarGrid.ActualHeight + CardGap));
+            PlaceListBackdropTop();
             PlaceListBackdrop();
         }
         catch (Exception ex) { Log.Error("backdrop capture failed", ex); }
@@ -363,11 +365,11 @@ public partial class MainWindow : Window
         Caret.Visibility = CaretGlow.Visibility = Query.IsKeyboardFocused && !r.IsEmpty ? Visibility.Visible : Visibility.Collapsed;
         if (Caret.Visibility != Visibility.Visible) return;
         var p = Query.TranslatePoint(r.TopLeft, CaretLayer);
-        Caret.Height = r.Height;
-        CaretMove.Y = p.Y;
-        CaretMove.X = p.X - 1.25;
-        CaretGlow.Height = r.Height + 6;
-        CaretGlowMove.Y = p.Y - 3;
+        Caret.Height = r.Height + 4;
+        CaretMove.Y = p.Y - 2;
+        CaretMove.X = p.X - 1.5;
+        CaretGlow.Height = r.Height + 10;
+        CaretGlowMove.Y = p.Y - 5;
         CaretGlowMove.X = p.X - 4;
         if (!UiMotion.Enabled)
         {
@@ -406,9 +408,14 @@ public partial class MainWindow : Window
         BarClip.Rect = new Rect(0, 0, e.NewSize.Width, e.NewSize.Height);
         BarClip.RadiusX = BarClip.RadiusY = r;
         BarShape.CornerRadius = BarOutline.CornerRadius = new CornerRadius(r);
-        if (e.HeightChanged) Canvas.SetTop(ListBackdrop, -_backdropPad - (e.NewSize.Height + CardGap));
+        if (e.HeightChanged) PlaceListBackdropTop();
         SyncCaret();
     }
+
+    /// <summary>The card's backdrop stays put on screen: it sits below the capsule, the scope chips (when shown) and the gap.</summary>
+    void PlaceListBackdropTop() => Canvas.SetTop(ListBackdrop, -_backdropPad - (BarGrid.ActualHeight + ScopeBar.ActualHeight + CardGap));
+
+    void ScopeBar_SizeChanged(object sender, SizeChangedEventArgs e) => PlaceListBackdropTop();
 
     readonly Siri.VoiceInput _voice = new();
 
@@ -505,29 +512,85 @@ public partial class MainWindow : Window
     void Query_TextChanged(object sender, TextChangedEventArgs e)
     {
         Placeholder.Visibility = Query.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        LockToGrid(AppCatalog.IsCatalogQuery(Query.Text));
         Disarm();
         ClosePreview();
         CloseTerminal();
-        if (AppCatalog.IsCatalogQuery(Query.Text))
+        RefreshResults();
+    }
+
+    /// <summary>What a search starts from: everything, or one scope picked with Ctrl+1 / 2 / 4 or a chip under the search box.</summary>
+    enum Scope { None, Apps, Files, Clipboard }
+
+    Scope _scope;
+
+    static readonly HashSet<ResultKind> FilesOnly = [ResultKind.File, ResultKind.Folder, ResultKind.Path];
+
+    /// <summary>Puts the results of the current scope and query on screen.</summary>
+    void RefreshResults()
+    {
+        if (_scope == Scope.Apps)
         {
             _cts?.Cancel();
-            _lastQuery = Query.Text.Trim();
-            // Laying out every tile takes a moment: let the keystrokes already waiting in first ("app" → "apple").
+            _lastQuery = "";
+            // Laying out every tile takes a moment: let the keystrokes already waiting in first.
             Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
             {
-                if (IsVisible && AppCatalog.IsCatalogQuery(Query.Text)) ShowCatalog();
+                if (IsVisible && _scope == Scope.Apps) ShowCatalog();
             });
             return;
         }
         if (IsGrid) { AppGrid.Visibility = Visibility.Collapsed; _gridShown = false; }
-        var scoped = AppCatalog.ScopedQuery(Query.Text); // "app apple music": apps only
-        _ = RunSearchAsync(scoped ?? Query.Text, appsOnly: scoped is not null);
+        _ = RunSearchAsync(Query.Text);
     }
 
-    static readonly HashSet<ResultKind> AppsOnly = [ResultKind.App];
+    /// <summary>
+    /// Switches the scope. Apps is the all-apps screen (typing jumps to an app, so the box starts empty); Files
+    /// searches files and folders only; Clipboard lists the clipboard history, the typed text filtering it.
+    /// </summary>
+    void SetScope(Scope scope)
+    {
+        if (_scope == scope) return;
+        _scope = scope;
+        LockToGrid(scope == Scope.Apps);
+        UpdatePlaceholder();
+        UpdateScopeBar();
+        Disarm();
+        ClosePreview();
+        CloseTerminal();
+        if (scope == Scope.Apps && Query.Text.Length > 0) Query.Clear(); // the change of text brings the screen up
+        else RefreshResults();
+    }
 
-    async Task RunSearchAsync(string text, bool expandSystemFolders = false, bool expandSystemFiles = false, bool appsOnly = false)
+    void UpdatePlaceholder() => Placeholder.Text = _scope switch
+    {
+        Scope.Apps => "앱 — 글자를 눌러 이동",
+        Scope.Files => "파일과 폴더 검색",
+        Scope.Clipboard => "클립보드 기록 — 입력해서 거르기",
+        _ => _settings.AiEnabled && Core.Ai.AiModel.IsAvailable ? "묻거나 검색" : "Quicklight 검색",
+    };
+
+    /// <summary>The chips under the search box show while the pointer is over it, and as long as a scope is on.</summary>
+    void UpdateScopeBar()
+    {
+        ScopeBar.Visibility = BarGrid.IsMouseOver || ScopeBar.IsMouseOver || _scope != Scope.None ? Visibility.Visible : Visibility.Collapsed;
+        ChipApps.IsChecked = _scope == Scope.Apps;
+        ChipFiles.IsChecked = _scope == Scope.Files;
+        ChipClipboard.IsChecked = _scope == Scope.Clipboard;
+    }
+
+    // Moving from the capsule onto a chip leaves one before it enters the other: look once both have settled.
+    void ScopeBar_MouseChanged(object sender, MouseEventArgs e) =>
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, () => UpdateScopeBar());
+
+    void Chip_Click(object sender, RoutedEventArgs e)
+    {
+        var scope = Enum.Parse<Scope>((string)((FrameworkElement)sender).Tag);
+        SetScope(_scope == scope ? Scope.None : scope);
+        UpdateScopeBar(); // a click flips the chip by itself
+        Keyboard.Focus(Query);
+    }
+
+    async Task RunSearchAsync(string text, bool expandSystemFolders = false, bool expandSystemFiles = false)
     {
         // Safe to dispose right after Cancel: the previous search only ever checks an already-cancelled token.
         _cts?.Cancel();
@@ -535,20 +598,26 @@ public partial class MainWindow : Window
         var cts = _cts = new CancellationTokenSource();
         var token = cts.Token;
         _lastQuery = text.Trim();
-        if (_lastQuery.Length == 0)
+        if (_lastQuery.Length == 0 && _scope != Scope.Clipboard)
         {
             Render([], keepSelection: false);
             return;
         }
         try
         {
+            if (_scope == Scope.Clipboard)
+            {
+                var entries = await _clipboard.ListAsync(_lastQuery, token);
+                if (!token.IsCancellationRequested) Render(entries, keepSelection: false);
+                return;
+            }
             // Instant providers first; files slot in as Everything answers (fast name-prefix pass, then the full pass).
-            var kinds = appsOnly ? AppsOnly : null;
+            var kinds = _scope == Scope.Files ? FilesOnly : null;
             var fast = await SearchOffUiAsync(text, FileStage.None, expandSystemFolders, expandSystemFiles, kinds, token);
             if (fast is null) return;
             Render(fast, keepSelection: false);
             // Later passes bring files, and network paths (too slow to check on every keystroke); skip them when there are neither.
-            if (appsOnly || (_lastQuery.Length < 2 || !_settings.FileSearch) && !PathProvider.IsNetworkQuery(_lastQuery)) return;
+            if ((_lastQuery.Length < 2 || !_settings.FileSearch) && !PathProvider.IsNetworkQuery(_lastQuery)) return;
 
             // Wait for a pause in typing: every Everything query takes its whole index (about a second on a big one),
             // and one per keystroke kept it so busy that Windows took it for hung.
@@ -805,6 +874,19 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
+        // Ctrl+1 apps, Ctrl+2 files, Ctrl+4 clipboard: the scope, or back to the plain search when it is already on. Ctrl+3 is free.
+        if (mods == ModifierKeys.Control && e.Key switch
+            {
+                Key.D1 or Key.NumPad1 => Scope.Apps,
+                Key.D2 or Key.NumPad2 => Scope.Files,
+                Key.D4 or Key.NumPad4 => Scope.Clipboard,
+                _ => (Scope?)null,
+            } is { } wanted)
+        {
+            SetScope(_scope == wanted ? Scope.None : wanted);
+            e.Handled = true;
+            return;
+        }
         // Menu key or Shift+F10 toggles the selected item's context menu on release (opening on press let the release close it).
         if (IsMenuKey(e)) { e.Handled = true; return; }
         if (_previewOpen)
@@ -835,7 +917,9 @@ public partial class MainWindow : Window
         if (_gridLocked && e.Key == Key.Back)
         {
             if (_typeAhead.Length > 0) { _typeAhead.Length--; TypeAheadChanged(); e.Handled = true; return; }
-            LockToGrid(false); // an empty buffer: Backspace edits the query again, which leaves the grid
+            SetScope(Scope.None); // an empty buffer: Backspace leaves the all-apps screen
+            e.Handled = true;
+            return;
         }
         // Like a terminal: ↑ in an empty box brings back the last query, again for older ones; ↓ goes back toward empty.
         if (e.Key is Key.Up or Key.Down && mods == ModifierKeys.None && BrowsingRecent && (e.Key == Key.Up || Query.Text.Length > 0))
@@ -876,6 +960,7 @@ public partial class MainWindow : Window
                 else if (_armedKey is not null) Disarm();
                 else if (_typeAhead.Length > 0) ClearTypeAhead();
                 else if (Query.Text.Length > 0) Query.Clear();
+                else if (_scope != Scope.None) SetScope(Scope.None);
                 else HideLauncher();
                 e.Handled = true; break;
             case Key.C when mods == (ModifierKeys.Control | ModifierKeys.Shift):
