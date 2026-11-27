@@ -26,7 +26,7 @@ public partial class MainWindow : Window
     double _roomCap = 570;
     const double MaxPanelHeight = 700;   // DIPs; the bar sits so that a fully expanded panel is centered on screen
     const double CardRadius = 36;        // corners of the results card
-    const double BarRadiusMax = 44;      // the search capsule is a pill (88 high); a taller (wrapped) one keeps this curve
+    const double BarRadiusMax = 48;      // the search capsule is a pill (96 high); a taller (wrapped) one keeps this curve
     const double CardGap = 10;           // DIPs between the capsule and the results card
     const double PillWidth = 720;        // the search pill, and the card except on the app screen
     const double AppCardWidth = 940;     // the card on the app screen: nine tile columns (the window leaves space for it)
@@ -44,12 +44,8 @@ public partial class MainWindow : Window
     ObservableCollection<ResultItem> _apps = [];
     readonly RecentQueries _recent = new(RecentQueries.DefaultPath);
     readonly ObservableCollection<ResultItem> _parts = []; // the previewed app's parts
-    readonly ObservableCollection<ActivityItem> _activities = [];
     readonly System.Windows.Threading.DispatcherTimer _indexPoll = new() { Interval = TimeSpan.FromSeconds(1) };
-    ActivityTracker.Handle? _indexActivity;
-    int _indexBusyPolls;
     int _unresponsivePolls;
-    int _activitySyncQueued;
     IReadOnlyList<AppEntry>? _catalogSource;
     CancellationTokenSource? _cts;
     string? _armedKey; // result waiting for the second Enter of a destructive command
@@ -86,15 +82,12 @@ public partial class MainWindow : Window
         Query.SizeChanged += (_, _) => SyncCaret();
         Query.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler((_, _) => SyncCaret()));
         Query.IsKeyboardFocusedChanged += (_, _) => SyncCaret();
-        Activities.ItemsSource = _activities;
-        ActivityTracker.Shared.Changed += QueueActivitySync;
         _indexPoll.Tick += (_, _) => _ = PollIndexAsync();
         IsVisibleChanged += (_, _) =>
         {
             if (IsVisible) { _indexPoll.Start(); _ = PollIndexAsync(); }
             else _indexPoll.Stop();
         };
-        SyncActivities();
         System.ComponentModel.DependencyPropertyDescriptor.FromProperty(VisibilityProperty, typeof(UIElement))
             .AddValueChanged(AppGrid, (_, _) => SyncCardWidth());
         Results.LayoutUpdated += (_, _) => MoveGlass(Results);
@@ -162,6 +155,8 @@ public partial class MainWindow : Window
 
     public void ShowLauncher()
     {
+        // With the answer panel open the hotkey closes it, and the search capsule does not flash up in between.
+        if (!IsVisible && Ai is { AnswerShowing: true }) { Ai.CloseAnswer(); return; }
         var (work, scale, hz) = NativeUi.MonitorUnderCursor();
         if (Math.Clamp(hz, 30, 500) != _frameRate) _blink = null;
         _frameRate = Math.Clamp(hz, 30, 500);
@@ -365,15 +360,19 @@ public partial class MainWindow : Window
     void UpdateCaret()
     {
         var r = Query.GetRectFromCharacterIndex(Query.CaretIndex);
-        Caret.Visibility = Query.IsKeyboardFocused && !r.IsEmpty ? Visibility.Visible : Visibility.Collapsed;
+        Caret.Visibility = CaretGlow.Visibility = Query.IsKeyboardFocused && !r.IsEmpty ? Visibility.Visible : Visibility.Collapsed;
         if (Caret.Visibility != Visibility.Visible) return;
         var p = Query.TranslatePoint(r.TopLeft, CaretLayer);
         Caret.Height = r.Height;
         CaretMove.Y = p.Y;
-        CaretMove.X = p.X - 1;
+        CaretMove.X = p.X - 1.25;
+        CaretGlow.Height = r.Height + 6;
+        CaretGlowMove.Y = p.Y - 3;
+        CaretGlowMove.X = p.X - 4;
         if (!UiMotion.Enabled)
         {
             Caret.BeginAnimation(OpacityProperty, null);
+            CaretGlow.BeginAnimation(OpacityProperty, null);
             return;
         }
         // Solid while typing or moving, then blink: starting the animation again restarts it from solid.
@@ -389,6 +388,7 @@ public partial class MainWindow : Window
             _blink.Freeze();
         }
         Caret.BeginAnimation(OpacityProperty, _blink);
+        CaretGlow.BeginAnimation(OpacityProperty, _blink);
     }
 
     // ---------- shape ----------
@@ -1847,59 +1847,16 @@ public partial class MainWindow : Window
         return tcs.Task;
     }
 
-    // ---------- background activity ----------
-
-    /// <summary>Tracker events come from any thread, often in bursts (pip output): sync once per dispatcher turn.</summary>
-    void QueueActivitySync()
-    {
-        if (Interlocked.Exchange(ref _activitySyncQueued, 1) == 1) return;
-        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
-        {
-            Interlocked.Exchange(ref _activitySyncQueued, 0);
-            SyncActivities();
-        });
-    }
-
-    /// <summary>Mirrors the tracker into the bars, updating rows in place so progress animates instead of flickering.</summary>
-    void SyncActivities()
-    {
-        var snapshot = ActivityTracker.Shared.Snapshot();
-        for (int i = _activities.Count - 1; i >= 0; i--)
-            if (!snapshot.Any(a => a.Id == _activities[i].Id)) _activities.RemoveAt(i);
-        foreach (var info in snapshot)
-        {
-            var item = _activities.FirstOrDefault(a => a.Id == info.Id);
-            if (item is null) _activities.Add(item = new ActivityItem(info.Id));
-            item.Update(info);
-        }
-        var visibility = _activities.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (ActivityPanel.Visibility == visibility) return;
-        ActivityPanel.Visibility = visibility;
-    }
+    // ---------- Everything ----------
 
     /// <summary>
-    /// While the launcher is open, shows Everything's indexing as a bar: loading its database (after a restart or a
-    /// rescan) right away, busy only when it lasts, since every search makes Everything briefly busy too.
+    /// While the launcher is open, watches whether Everything answers (its indexing itself is not shown).
     /// </summary>
     async Task PollIndexAsync()
     {
         var state = _settings.FileSearch ? await Task.Run(() => EverythingClient.GetDbState(200)) : EverythingClient.DbState.NotRunning;
-        _indexBusyPolls = state == EverythingClient.DbState.Busy ? _indexBusyPolls + 1 : 0;
         _unresponsivePolls = state == EverythingClient.DbState.Unresponsive ? _unresponsivePolls + 1 : 0;
         ShowEverythingStatus(state);
-        string? detail = state switch
-        {
-            EverythingClient.DbState.Loading => "색인을 읽는 중",
-            EverythingClient.DbState.Busy when _indexBusyPolls >= 3 => "변경 사항을 반영하는 중",
-            _ => null,
-        };
-        if (detail is null)
-        {
-            _indexActivity?.Dispose();
-            _indexActivity = null;
-        }
-        else if (_indexActivity is null) _indexActivity = ActivityTracker.Shared.Begin("everything", "파일 색인 중 (Everything)", null, detail);
-        else _indexActivity.Report("파일 색인 중 (Everything)", null, detail);
     }
 
     async Task OpenEverythingOptionsAsync()

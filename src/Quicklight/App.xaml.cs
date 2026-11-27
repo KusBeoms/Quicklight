@@ -68,6 +68,15 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += (_, args) => Log.Error("unhandled exception", args.ExceptionObject as Exception);
 
         _settings = QuicklightSettings.Load();
+        // One typeface everywhere, also for what no window sets it on (dialogs, menus, tooltips, plain controls).
+        var face = (System.Windows.Media.FontFamily)Resources["UiFont"];
+        // Control itself can't be overridden (WPF already registers Control's own metadata through AddOwner, so a second
+        // override throws and aborts start-up). FontFamily inherits, so overriding the roots of each visual tree is enough.
+        OverrideFont(System.Windows.Documents.TextElement.FontFamilyProperty, typeof(System.Windows.Documents.TextElement), face);
+        OverrideFont(System.Windows.Controls.TextBlock.FontFamilyProperty, typeof(System.Windows.Controls.TextBlock), face);
+        OverrideFont(System.Windows.Controls.Control.FontFamilyProperty, typeof(Window), face);
+        OverrideFont(System.Windows.Controls.Control.FontFamilyProperty, typeof(System.Windows.Controls.ContextMenu), face);
+        OverrideFont(System.Windows.Controls.Control.FontFamilyProperty, typeof(System.Windows.Controls.ToolTip), face);
         Theme.Apply(Resources, _settings.Theme);
         _usage = new UsageStore(UsageStore.DefaultPath);
         var clipboard = new ClipboardHistoryProvider();
@@ -103,7 +112,7 @@ public partial class App : Application
             {
                 Thread.Sleep(600);
                 var files = AskQueue.Drain();
-                if (files.Count > 0) Dispatcher.BeginInvoke(() => _ai?.Compose(files, null, IntPtr.Zero));
+                if (files.Count > 0) Dispatcher.BeginInvoke(() => { _window.HideLauncher(); _ai?.Compose(files, null, IntPtr.Zero); }); // the launcher and the answer panel never show together
             }
         }) { IsBackground = true, Name = "Ask listener" };
         askListener.Start();
@@ -130,6 +139,13 @@ public partial class App : Application
 
         _ = SetUpEverythingAsync(userAsked: false);
         _ = _updates.RunBackgroundAsync(launcherOpen: () => _window.IsVisible);
+    }
+
+    // A font default is cosmetic: if WPF refuses it, log and keep starting instead of leaving a half-started process behind.
+    static void OverrideFont(DependencyProperty property, Type type, System.Windows.Media.FontFamily face)
+    {
+        try { property.OverrideMetadata(type, new FrameworkPropertyMetadata(face)); }
+        catch (ArgumentException ex) { Log.Error($"font default for {type.Name} not applied", ex); }
     }
 
     static string? ArgAfter(string[] args, string name)

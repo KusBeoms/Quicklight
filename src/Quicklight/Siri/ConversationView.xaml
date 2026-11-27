@@ -18,15 +18,15 @@
             </StackPanel>
         </ScrollViewer>
 
-        <WrapPanel x:Name="Chips" Grid.Row="1" Margin="16,0,16,6" Visibility="Collapsed" />
+        <WrapPanel x:Name="Chips" Grid.Row="1" Margin="20,0,20,8" Visibility="Collapsed" />
 
-        <Grid Grid.Row="2" Margin="14,6,14,14">
+        <Grid Grid.Row="2" Margin="16,6,16,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <Button x:Name="AddButton" Style="{StaticResource SiriCircleButton}" Content="&#xE710;" ToolTip="추가" Click="Add_Click" VerticalAlignment="Bottom">
+            <Button x:Name="AddButton" Style="{StaticResource SiriCircleButton}" Width="38" Height="38" FontSize="16" Content="&#xE710;" ToolTip="추가" Click="Add_Click" VerticalAlignment="Bottom">
                 <Button.ContextMenu>
                     <ContextMenu x:Name="AddMenu">
                         <MenuItem Header="사진" Click="AddPhoto_Click" />
@@ -34,7 +34,7 @@
                     </ContextMenu>
                 </Button.ContextMenu>
             </Button>
-            <Border Grid.Column="1" Margin="8,0" CornerRadius="16" MinHeight="32" Background="{DynamicResource GlyphBackBrush}">
+            <Border Grid.Column="1" Margin="10,0" CornerRadius="19" MinHeight="38" Background="{DynamicResource GlyphBackBrush}">
                 <Border.Style>
                     <Style TargetType="Border">
                         <Setter Property="BorderThickness" Value="1" />
@@ -47,16 +47,16 @@
                     </Style>
                 </Border.Style>
                 <Grid>
-                    <TextBlock x:Name="Placeholder" Text="Qutra에게 물어보기" FontSize="13.5" Margin="14,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                    <TextBlock x:Name="Placeholder" Text="Qutra에게 물어보기" FontSize="15.5" Margin="18,0" VerticalAlignment="Center" IsHitTestVisible="False"
                                Foreground="{DynamicResource PlaceholderBrush}" />
-                    <TextBox x:Name="Input" AutomationProperties.Name="Qutra에게 물어보기" FontSize="13.5" BorderThickness="0" Background="Transparent" Padding="14,7" MaxHeight="120"
+                    <TextBox x:Name="Input" AutomationProperties.Name="Qutra에게 물어보기" FontSize="15.5" BorderThickness="0" Background="Transparent" Padding="18,8" MaxHeight="130"
                              AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Hidden"
                              Foreground="{DynamicResource TextBrush}" CaretBrush="{DynamicResource TextBrush}"
                              SelectionBrush="{DynamicResource AccentBrush}" VerticalContentAlignment="Center"
                              PreviewKeyDown="Input_PreviewKeyDown" TextChanged="Input_TextChanged" />
                 </Grid>
             </Border>
-            <Button x:Name="SendButton" Grid.Column="2" Style="{StaticResource SiriCircleButton}" Content="&#xE720;" ToolTip="말하기"
+            <Button x:Name="SendButton" Grid.Column="2" Style="{StaticResource SiriCircleButton}" Width="38" Height="38" FontSize="16" Content="&#xE720;" ToolTip="말하기"
                     Background="{DynamicResource AccentBrush}" Foreground="White" Click="Send_Click" VerticalAlignment="Bottom" />
         </Grid>
     </Grid>

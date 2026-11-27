@@ -156,7 +156,7 @@
                 </Grid.ColumnDefinitions>
                 <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource IconTemplate}" Width="44" Height="44" VerticalAlignment="Top" Margin="0,4,0,0" />
                 <StackPanel Grid.Column="1" Margin="16,0,12,0">
-                    <TextBlock Text="{Binding Title}" FontSize="{Binding HeroFontSize}" FontWeight="SemiBold" TextWrapping="Wrap"
+                    <TextBlock Text="{Binding Title}" FontSize="{Binding HeroFontSize}" FontFamily="{StaticResource UiFontBold}" TextWrapping="Wrap"
                                TextTrimming="CharacterEllipsis" MaxHeight="190" LineStackingStrategy="MaxHeight" />
                     <TextBlock Text="{Binding Subtitle}" FontSize="14" Foreground="{DynamicResource SubtleTextBrush}" TextWrapping="Wrap" Margin="0,6,0,0" />
                 </StackPanel>
@@ -201,55 +201,7 @@
         </DataTemplate>
 
         <DataTemplate x:Key="GroupHeader">
-            <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource HeaderBrush}" Margin="22,8,0,3" />
-        </DataTemplate>
-
-        <!-- Background work (translation install, model download, update download, indexing) as a thin bar. -->
-        <DataTemplate x:Key="ActivityTemplate">
-            <StackPanel Margin="24,7">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding Title}" FontSize="12" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Grid.Column="1" Text="{Binding RightText}" FontSize="11.5" Foreground="{DynamicResource SubtleTextBrush}" Margin="12,0,0,0" />
-                </Grid>
-                <Grid Height="4" Margin="0,6,0,0" ClipToBounds="True">
-                    <Border CornerRadius="2" Background="{DynamicResource SeparatorBrush}" />
-                    <Border x:Name="Fill" CornerRadius="2" Background="{DynamicResource AccentBrush}" RenderTransformOrigin="0,0.5">
-                        <Border.RenderTransform>
-                            <ScaleTransform ScaleX="{Binding Progress}" />
-                        </Border.RenderTransform>
-                    </Border>
-                    <Border x:Name="Runner" Width="140" HorizontalAlignment="Left" CornerRadius="2" Background="{DynamicResource AccentBrush}" Visibility="Collapsed">
-                        <Border.RenderTransform>
-                            <TranslateTransform X="-140" />
-                        </Border.RenderTransform>
-                    </Border>
-                </Grid>
-            </StackPanel>
-            <DataTemplate.Triggers>
-                <DataTrigger Binding="{Binding IsIndeterminate}" Value="True">
-                    <Setter TargetName="Fill" Property="Visibility" Value="Collapsed" />
-                    <Setter TargetName="Runner" Property="Visibility" Value="Visible" />
-                    <DataTrigger.EnterActions>
-                        <BeginStoryboard x:Name="Run">
-                            <Storyboard RepeatBehavior="Forever">
-                                <DoubleAnimation Storyboard.TargetName="Runner" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
-                                                 From="-140" To="680" Duration="0:0:1.4">
-                                    <DoubleAnimation.EasingFunction>
-                                        <SineEase EasingMode="EaseInOut" />
-                                    </DoubleAnimation.EasingFunction>
-                                </DoubleAnimation>
-                            </Storyboard>
-                        </BeginStoryboard>
-                    </DataTrigger.EnterActions>
-                    <DataTrigger.ExitActions>
-                        <StopStoryboard BeginStoryboardName="Run" />
-                    </DataTrigger.ExitActions>
-                </DataTrigger>
-            </DataTemplate.Triggers>
+            <TextBlock Text="{Binding Name}" FontSize="13" FontFamily="{StaticResource UiFontBold}" Foreground="{DynamicResource HeaderBrush}" Margin="22,8,0,3" />
         </DataTemplate>
 
         <!-- Right-click menu, drawn to match the panel. -->
@@ -304,11 +256,11 @@
          blurred backdrop, tint and outline. The margin leaves room for the drop shadow. Opacity is animated on show
          and hide; the blur only on the content, so the outlines stay crisp. -->
     <StackPanel x:Name="Shell" Margin="24" VerticalAlignment="Top">
-        <Grid x:Name="BarGrid" MinHeight="88" Width="720" SizeChanged="BarGrid_SizeChanged">
-            <Border x:Name="BarShape" CornerRadius="44" Background="{DynamicResource SolidPanelBrush}" Effect="{StaticResource SurfaceShadow}" />
+        <Grid x:Name="BarGrid" MinHeight="96" Width="720" SizeChanged="BarGrid_SizeChanged">
+            <Border x:Name="BarShape" CornerRadius="48" Background="{DynamicResource SolidPanelBrush}" Effect="{StaticResource SurfaceShadow}" />
             <Grid x:Name="BarPanel">
                 <Grid.Clip>
-                    <RectangleGeometry x:Name="BarClip" Rect="0,0,720,88" RadiusX="44" RadiusY="44" />
+                    <RectangleGeometry x:Name="BarClip" Rect="0,0,720,96" RadiusX="48" RadiusY="48" />
                 </Grid.Clip>
                 <!-- A blurred snapshot of the screen behind the window: acrylic that works with any corner radius.
                      Blurred once when captured (no live effect, so animation frames stay cheap), drawn scaled up.
@@ -317,32 +269,41 @@
                     <Image x:Name="Backdrop" Stretch="None" RenderOptions.BitmapScalingMode="Linear" />
                 </Canvas>
                 <Border x:Name="Tint" Background="{DynamicResource BarTintBrush}" />
-                <Grid x:Name="Bar" Margin="30,14,28,14">
+                <Grid x:Name="Bar" Margin="32,14,32,14">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="25" Opacity="0.7"
-                               Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,16,0" />
-                    <TextBlock Grid.Column="1" x:Name="Placeholder" Text="묻거나 검색" FontSize="26" IsHitTestVisible="False"
+                    <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="27" Opacity="0.7" Width="32" TextAlignment="Center"
+                               Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,14,0" />
+                    <TextBlock Grid.Column="1" x:Name="Placeholder" Text="묻거나 검색" FontSize="29" IsHitTestVisible="False"
                                Foreground="{DynamicResource PlaceholderBrush}" VerticalAlignment="Center" Margin="2,0,0,0" />
-                    <TextBox Grid.Column="1" x:Name="Query" AutomationProperties.Name="검색 또는 질문" FontSize="26" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" MaxHeight="150" VerticalScrollBarVisibility="Hidden"
+                    <TextBox Grid.Column="1" x:Name="Query" AutomationProperties.Name="검색 또는 질문" FontSize="29" BorderThickness="0" Background="Transparent" TextWrapping="Wrap" MaxHeight="150" VerticalScrollBarVisibility="Hidden"
                              Foreground="{DynamicResource TextBrush}" CaretBrush="Transparent"
                              SelectionBrush="{DynamicResource AccentBrush}" VerticalAlignment="Center"
                              TextChanged="Query_TextChanged" PreviewKeyDown="Query_PreviewKeyDown" PreviewKeyUp="Query_PreviewKeyUp"
                              PreviewTextInput="Query_PreviewTextInput"
                              InputMethod.PreferredImeState="DoNotCare" />
                     <!-- On the all-apps screen, what was typed to jump to an app ("clau" → Claude). -->
-                    <TextBlock Grid.Column="1" x:Name="TypeAhead" FontSize="26" HorizontalAlignment="Right" VerticalAlignment="Center"
+                    <TextBlock Grid.Column="1" x:Name="TypeAhead" FontSize="29" HorizontalAlignment="Right" VerticalAlignment="Center"
                                Margin="0,0,4,0" Foreground="{DynamicResource AccentBrush}" IsHitTestVisible="False" Visibility="Collapsed" />
                     <Canvas Grid.Column="1" x:Name="CaretLayer" IsHitTestVisible="False">
                         <!-- "— AI에게 물어보기": right after a typed question while asking is the top result, like Spotlight's "— Siri에게 물어보기". -->
-                        <TextBlock x:Name="AskHint" Text="— Qutra에게 묻기" FontSize="26" Foreground="{DynamicResource PlaceholderBrush}" Visibility="Collapsed" />
-                        <Rectangle x:Name="Caret" Width="2" RadiusX="1" RadiusY="1" Fill="{DynamicResource TextBrush}" Visibility="Collapsed">
+                        <TextBlock x:Name="AskHint" Text="— Qutra에게 묻기" FontSize="29" Foreground="{DynamicResource PlaceholderBrush}" Visibility="Collapsed" />
+                        <!-- Neon: a wide blurred halo under a bright core that has its own glow. -->
+                        <Rectangle x:Name="CaretGlow" Width="8" RadiusX="4" RadiusY="4" Fill="#7FCBFF" Visibility="Collapsed">
                             <Rectangle.Effect>
-                                <DropShadowEffect Color="#9FD8FF" BlurRadius="6" ShadowDepth="0" Opacity="0.38" />
+                                <BlurEffect Radius="10" KernelType="Gaussian" />
+                            </Rectangle.Effect>
+                            <Rectangle.RenderTransform>
+                                <TranslateTransform x:Name="CaretGlowMove" />
+                            </Rectangle.RenderTransform>
+                        </Rectangle>
+                        <Rectangle x:Name="Caret" Width="2.5" RadiusX="1.25" RadiusY="1.25" Fill="#F2FAFF" Visibility="Collapsed">
+                            <Rectangle.Effect>
+                                <DropShadowEffect Color="#8FD3FF" BlurRadius="14" ShadowDepth="0" Opacity="1" />
                             </Rectangle.Effect>
                             <Rectangle.RenderTransform>
                                 <TranslateTransform x:Name="CaretMove" />
@@ -352,12 +313,12 @@
                     <TextBlock Grid.Column="2" x:Name="Status" FontSize="13" Foreground="{DynamicResource SubtleTextBrush}"
                                VerticalAlignment="Center" Margin="12,0,0,0" />
                     <!-- Dictation, as the microphone in Spotlight's field. -->
-                    <TextBlock Grid.Column="3" x:Name="Mic" Text="&#xE720;" FontFamily="{StaticResource IconFont}" FontSize="24" Opacity="0.7" Margin="14,0,0,0"
+                    <TextBlock Grid.Column="3" x:Name="Mic" Text="&#xE720;" FontFamily="{StaticResource IconFont}" FontSize="26" Opacity="0.7" Width="32" TextAlignment="Center" Margin="14,0,0,0"
                                Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Cursor="Hand" ToolTip="말하기" AutomationProperties.Name="말하기" MouseLeftButtonUp="Mic_Click" />
                 </Grid>
 
             </Grid>
-            <Border x:Name="BarOutline" CornerRadius="44" BorderThickness="1" BorderBrush="{DynamicResource BarRimBrush}" IsHitTestVisible="False" />
+            <Border x:Name="BarOutline" CornerRadius="48" BorderThickness="1" BorderBrush="{DynamicResource BarRimBrush}" IsHitTestVisible="False" />
         </Grid>
 
         <!-- The results card. Its height animates towards the content's; at zero it fades out. On the app screen it widens. -->
@@ -371,11 +332,6 @@
                 <!-- On a Canvas so the content keeps its natural height while the card's height animates towards it. -->
                 <Canvas>
                     <StackPanel x:Name="Body" Width="{Binding ActualWidth, ElementName=ListPanel}" SizeChanged="Body_SizeChanged">
-                <!-- Background work as thin bars, right under the search pill. -->
-                <Border x:Name="ActivityPanel" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource SeparatorBrush}" Padding="0,5,0,3"
-                        Visibility="Collapsed" IsHitTestVisible="False">
-                    <ItemsControl x:Name="Activities" ItemTemplate="{StaticResource ActivityTemplate}" Focusable="False" />
-                </Border>
                 <ListBox x:Name="Results" ItemsSource="{Binding Source={StaticResource GroupedResults}}"
                          ItemTemplateSelector="{StaticResource ResultSelector}" ItemContainerStyle="{StaticResource RowStyle}"
                          Template="{StaticResource GlassList}" Background="Transparent" BorderThickness="0" Padding="0,4,0,6" MaxHeight="570" Visibility="Collapsed"
@@ -397,7 +353,7 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <StackPanel Margin="4,0,4,8">
-                        <TextBlock x:Name="PreviewTitle" FontSize="14.5" FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="PreviewTitle" FontSize="14.5" FontFamily="{StaticResource UiFontBold}" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="PreviewInfo" FontSize="11.5" Foreground="{DynamicResource SubtleTextBrush}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0" />
                     </StackPanel>
                     <Border Grid.Row="1" CornerRadius="12" Background="{DynamicResource GlyphBackBrush}" ClipToBounds="True">

@@ -90,7 +90,7 @@ public static class Theme
         Set(res, "HoverBrush", Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF));
         Set(res, "BorderBrush", Color.FromArgb(0x29, 0xFF, 0xFF, 0xFF));
         Set(res, "GlassFillBrush", Color.FromArgb(0x70, 0x3A, 0x3A, 0x42));
-        var answer = new LinearGradientBrush(Color.FromRgb(0x26, 0x26, 0x2B), Color.FromRgb(0x1A, 0x1A, 0x1E), 90);
+        var answer = new LinearGradientBrush(Color.FromRgb(0x08, 0x08, 0x0A), Color.FromRgb(0x02, 0x02, 0x03), 90); // as black as the search capsule
         answer.Freeze();
         res["AnswerSurfaceBrush"] = answer;
         Set(res, "AccentBrush", AccentColor());

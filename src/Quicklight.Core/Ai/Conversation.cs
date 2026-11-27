@@ -1,7 +1,7 @@
 namespace Quicklight.Core.Ai;
 
 /// <summary>What the AI window shows: one state at a time, driven by <see cref="AiSession.StateChanged"/>.</summary>
-public enum AiState { Idle, Working, Searching, Answer, Error }
+public enum AiState { Idle, Working, Searching, Answer, Error, Loading }
 
 public enum ChatRole { User, Assistant }
 

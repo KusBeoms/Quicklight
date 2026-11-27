@@ -8,7 +8,9 @@
                 <ResourceDictionary Source="Siri/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
-            <FontFamily x:Key="UiFont">./Assets/Fonts/#Pretendard Std, Segoe UI Variable Text, Segoe UI, Malgun Gothic</FontFamily>
+            <!-- The Jamsil: the one typeface of every window. Each weight is a family of its own, so bold text names the Bold file. -->
+            <FontFamily x:Key="UiFont">./Assets/Fonts/#The Jamsil 3 Regular, Segoe UI Variable Text, Segoe UI, Malgun Gothic</FontFamily>
+            <FontFamily x:Key="UiFontBold">./Assets/Fonts/#The Jamsil 5 Bold, Segoe UI Variable Text, Segoe UI, Malgun Gothic</FontFamily>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

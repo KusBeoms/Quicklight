@@ -176,6 +176,16 @@ public sealed class AiHost : IConsent, IDisposable
         OpenApp(conv);
     }
 
+    public bool AnswerShowing => _answer?.Showing ?? false;
+
+    /// <summary>Closes the answer panel as its own close button does (the app it came from gets the focus back).</summary>
+    public void CloseAnswer()
+    {
+        if (_answer is not { Showing: true }) return;
+        _answer.CloseAndReturn();
+        ViewClosed();
+    }
+
     public void ShowLast()
     {
         var c = Store.All.FirstOrDefault();
@@ -213,7 +223,7 @@ public sealed class AiHost : IConsent, IDisposable
 
     public void Answer(bool allow) => _confirm?.TrySetResult(allow);
 
-    bool HasVisibleView => (_answer?.IsVisible ?? false) || (_app?.IsVisible ?? false);
+    bool HasVisibleView => (_answer?.Showing ?? false) || (_app?.IsVisible ?? false);
 
     /// <summary>A window showing the conversation closed: work that nothing on screen shows any more stops.</summary>
     public void ViewClosed()

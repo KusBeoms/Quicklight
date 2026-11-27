@@ -52,7 +52,7 @@ public sealed partial class AiSession : IDisposable
         _idle = new Timer(_ => StopIfIdle(), null, Timeout.Infinite, Timeout.Infinite);
     }
 
-    /// <summary>Working when a question starts, Searching while a read-only tool runs, then Answer or Error (Idle after a cancel).</summary>
+    /// <summary>Loading while the model starts, Working when it answers, Searching while a read-only tool runs, then Answer or Error (Idle after a cancel).</summary>
     public event Action<AiState>? StateChanged;
 
     /// <summary>Loads the model ahead of the first question so it answers sooner.</summary>
@@ -64,11 +64,16 @@ public sealed partial class AiSession : IDisposable
 
     async Task<ChatMessage> AskCoreAsync(Conversation conv, string text, IReadOnlyList<Attachment>? attachments, CancellationToken ct)
     {
-        Raise(AiState.Working);
+        bool loading = !_fake && !_ready;
+        Raise(loading ? AiState.Loading : AiState.Working); // Loading: the model is still being read into memory
         _store.Add(conv, new ChatMessage { Role = ChatRole.User, Text = text, Attachments = attachments?.ToList() ?? [] });
         try
         {
-            var reply = await RunAsync(() => AnswerAsync(conv, ct), ct);
+            var reply = await RunAsync(() =>
+            {
+                if (loading) Raise(AiState.Working); // the model is up now
+                return AnswerAsync(conv, ct);
+            }, ct);
             _store.Add(conv, reply);
             Raise(reply.IsError ? AiState.Error : AiState.Answer);
             return reply;

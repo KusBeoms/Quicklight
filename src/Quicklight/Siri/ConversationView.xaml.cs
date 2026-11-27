@@ -151,7 +151,7 @@ public partial class ConversationView : UserControl
     {
         // The question: a small rounded bubble on the right.
         var stack = new StackPanel();
-        var text = new TextBlock { Text = m.Text, FontSize = 13, LineHeight = 19, TextWrapping = TextWrapping.Wrap };
+        var text = new TextBlock { Text = m.Text, FontSize = 15, LineHeight = 22, TextWrapping = TextWrapping.Wrap };
         text.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
         stack.Children.Add(text);
         foreach (var a in m.Attachments)
@@ -177,7 +177,7 @@ public partial class ConversationView : UserControl
             var card = new Border { CornerRadius = new CornerRadius(14), Padding = new Thickness(14, 12, 14, 12) };
             card.SetResourceReference(Border.BackgroundProperty, "GlyphBackBrush");
             var inner = new StackPanel();
-            var msg = new TextBlock { Text = m.Text, FontSize = 13.5, LineHeight = 20, TextWrapping = TextWrapping.Wrap };
+            var msg = new TextBlock { Text = m.Text, FontSize = 15, LineHeight = 22, TextWrapping = TextWrapping.Wrap };
             msg.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
             inner.Children.Add(msg);
             var retry = new Button { Content = "다시 시도", Style = (Style)FindResource("SiriFlatButton"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) };
@@ -257,9 +257,9 @@ public partial class ConversationView : UserControl
         var card = new Border { CornerRadius = new CornerRadius(16), Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 0, 0, 14) };
         card.SetResourceReference(Border.BackgroundProperty, "GlyphBackBrush");
         var stack = new StackPanel();
-        var head = new TextBlock { Text = "Qutra가 이 작업을 하려고 합니다", FontSize = 12 };
+        var head = new TextBlock { Text = "Qutra가 이 작업을 하려고 합니다", FontSize = 13 };
         head.SetResourceReference(TextBlock.ForegroundProperty, "SubtleTextBrush");
-        var what = new TextBlock { Text = summary, FontSize = 13.5, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 12) };
+        var what = new TextBlock { Text = summary, FontSize = 15, FontFamily = Fonts.Bold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 12) };
         what.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var no = new Button { Content = "취소", Style = (Style)FindResource("SiriFlatButton"), Margin = new Thickness(0, 0, 8, 0) };

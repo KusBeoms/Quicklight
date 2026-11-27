@@ -76,7 +76,7 @@ public partial class SiriAppWindow : Window
         }
         var title = new TextBlock
         {
-            Text = c.Title.Length > 0 ? c.Title : "새로운 대화", FontWeight = FontWeights.SemiBold, FontSize = 13.5,
+            Text = c.Title.Length > 0 ? c.Title : "새로운 대화", FontFamily = Fonts.Bold, FontSize = 13.5,
             TextWrapping = _grid ? TextWrapping.Wrap : TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = _grid ? 40 : 20,
         };
         head.Children.Add(title);

@@ -13,7 +13,7 @@ namespace Quicklight.Siri;
 /// </summary>
 public static partial class MarkdownView
 {
-    public const double BodySize = 14, BodyLine = 21, TitleSize = 17, TitleLine = 23;
+    public const double BodySize = 15, BodyLine = 22, TitleSize = 18, TitleLine = 25;
 
     public static UIElement Build(string text, FrameworkElement scope)
     {
@@ -42,7 +42,7 @@ public static partial class MarkdownView
             var heading = Heading().Match(line);
             if (heading.Success)
             {
-                Add(stack, Paragraph(heading.Groups[1].Value, scope, TitleSize, TitleLine, FontWeights.SemiBold, bottom: 6));
+                Add(stack, Paragraph(heading.Groups[1].Value, scope, TitleSize, TitleLine, Fonts.Bold, bottom: 6));
                 i++;
                 continue;
             }
@@ -56,7 +56,7 @@ public static partial class MarkdownView
             // A paragraph runs to the next blank line or block.
             var para = new List<string> { line.Trim() };
             for (i++; i < lines.Length && lines[i].Trim().Length > 0 && !IsBlockStart(lines, i); i++) para.Add(lines[i].Trim());
-            Add(stack, Paragraph(string.Join(" ", para), scope, BodySize, BodyLine, FontWeights.Normal));
+            Add(stack, Paragraph(string.Join(" ", para), scope, BodySize, BodyLine));
         }
         return stack;
     }
@@ -67,13 +67,14 @@ public static partial class MarkdownView
 
     static void Add(StackPanel stack, UIElement e) => stack.Children.Add(e);
 
-    static TextBlock Paragraph(string text, FrameworkElement scope, double size, double line, FontWeight weight, double bottom = 10)
+    static TextBlock Paragraph(string text, FrameworkElement scope, double size, double line, FontFamily? face = null, double bottom = 10)
     {
         var tb = new TextBlock
         {
             FontSize = size, LineHeight = line, LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
-            FontWeight = weight, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, bottom),
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, bottom),
         };
+        if (face is not null) tb.FontFamily = face;
         tb.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
         AddInlines(tb.Inlines, text, scope);
         return tb;
@@ -87,7 +88,7 @@ public static partial class MarkdownView
         var dot = new TextBlock { Text = marker, FontSize = BodySize, LineHeight = BodyLine, LineStackingStrategy = LineStackingStrategy.BlockLineHeight };
         dot.SetResourceReference(TextBlock.ForegroundProperty, "SubtleTextBrush");
         grid.Children.Add(dot);
-        var body = Paragraph(text, scope, BodySize, BodyLine, FontWeights.Normal, bottom: 0);
+        var body = Paragraph(text, scope, BodySize, BodyLine, bottom: 0);
         Grid.SetColumn(body, 1);
         grid.Children.Add(body);
         return grid;
@@ -114,7 +115,8 @@ public static partial class MarkdownView
             {
                 var cell = new Border { BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(8) };
                 cell.SetResourceReference(Border.BorderBrushProperty, "SeparatorBrush");
-                var tb = new TextBlock { FontSize = 13, TextWrapping = TextWrapping.Wrap, FontWeight = r == 0 ? FontWeights.SemiBold : FontWeights.Normal };
+                var tb = new TextBlock { FontSize = 13, TextWrapping = TextWrapping.Wrap };
+                if (r == 0) tb.FontFamily = Fonts.Bold;
                 tb.SetResourceReference(TextBlock.ForegroundProperty, r == 0 ? "SubtleTextBrush" : "TextBrush");
                 AddInlines(tb.Inlines, c < rows[r].Length ? rows[r][c] : "", scope);
                 cell.Child = tb;
@@ -139,7 +141,7 @@ public static partial class MarkdownView
         foreach (Match m in Inline().Matches(text))
         {
             if (m.Index > pos) inlines.Add(new Run(text[pos..m.Index]));
-            if (m.Groups[1].Success) inlines.Add(new Run(m.Groups[1].Value) { FontWeight = FontWeights.SemiBold });
+            if (m.Groups[1].Success) inlines.Add(new Run(m.Groups[1].Value) { FontFamily = Fonts.Bold });
             else if (m.Groups[2].Success)
             {
                 var code = new Run(m.Groups[2].Value) { FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 12.5 };

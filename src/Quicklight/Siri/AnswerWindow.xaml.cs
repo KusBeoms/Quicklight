@@ -20,12 +20,13 @@ namespace Quicklight.Siri;
 public partial class AnswerWindow : Window
 {
     const double ShadowMargin = 28;
-    const double PillHeight = 68, PillRadius = PillHeight / 2, PanelRadius = 28;
-    const double DefaultWidth = 420, DefaultHeight = 600, MinPanelWidth = 320, MinPanelHeight = 300;
+    const double PillHeight = 76, PillRadius = PillHeight / 2, PanelRadius = 28;
+    const double DefaultWidth = 440, DefaultHeight = 620, MinPanelWidth = 320, MinPanelHeight = 300;
     static readonly KeySpline BoundsEase = new(0.25, 0.10, 0.25, 1);
 
     readonly AiHost _host;
-    readonly AiProgress _progress = new(28, 18, "TextBrush");
+    readonly ScaleTransform _shellScale = new(); // the closing animation settles the panel back a little as it fades
+    readonly AiProgress _progress = new(60, 22, "TextBrush");
     Conversation? _conv;
     IntPtr _returnTo;
     Rect _origin;               // the launcher's capsule on screen, physical pixels
@@ -43,6 +44,8 @@ public partial class AnswerWindow : Window
         InitializeComponent();
         Theme.ApplyInk(Resources);
         Status.Child = _progress;
+        Shell.RenderTransformOrigin = new Point(0.5, 0.35);
+        Shell.RenderTransform = _shellScale;
         foreach (var t in Grips.Children.OfType<Thumb>()) t.Background = Brushes.Transparent;
         Chat.Attach(host);
         Chat.ConversationStarted += c => _conv = c;
@@ -60,6 +63,9 @@ public partial class AnswerWindow : Window
     }
 
     [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
+
+    /// <summary>On screen (or fading out): a launcher must not open next to it.</summary>
+    public bool Showing => _mode != Mode.Hidden;
 
     IntPtr Hwnd => new WindowInteropHelper(this).EnsureHandle();
 
@@ -130,6 +136,9 @@ public partial class AnswerWindow : Window
     {
         StopMorph();
         ResetOpacity(Shell, 1);
+        _shellScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        _shellScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        _shellScale.ScaleX = _shellScale.ScaleY = 1;
         ResetOpacity(Panel, 0);
         ResetOpacity(CapsuleBg, 1);
         ResetOpacity(Status, 0);
@@ -382,7 +391,13 @@ public partial class AnswerWindow : Window
         StopMorph();
         Panel.IsHitTestVisible = false;
         Grips.Visibility = Visibility.Collapsed;
-        UiMotion.Fade(Shell, 0, UiMotion.Quick, () =>
+        if (UiMotion.Enabled && IsVisible)
+        {
+            var settle = new DoubleAnimation(1, 0.94, TimeSpan.FromMilliseconds(UiMotion.Standard)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
+            _shellScale.BeginAnimation(ScaleTransform.ScaleXProperty, settle);
+            _shellScale.BeginAnimation(ScaleTransform.ScaleYProperty, settle);
+        }
+        UiMotion.Fade(Shell, 0, UiMotion.Standard, () =>
         {
             if (gen != _generation) return; // opened again while fading
             Hide();

@@ -16,35 +16,35 @@
                 <DropShadowEffect BlurRadius="30" ShadowDepth="8" Direction="270" Opacity="0.45" />
             </Grid.Effect>
             <Border x:Name="PanelBg" CornerRadius="34" BorderThickness="1"
-                    Background="{DynamicResource AnswerSurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" />
-            <Border x:Name="CapsuleBg" CornerRadius="44" BorderThickness="1"
+                    Background="{DynamicResource AnswerSurfaceBrush}" BorderBrush="{DynamicResource BarRimBrush}" />
+            <Border x:Name="CapsuleBg" CornerRadius="48" BorderThickness="1"
                     Background="{DynamicResource BarTintBrush}" BorderBrush="{DynamicResource BarRimBrush}" />
         </Grid>
 
         <!-- The question as the launcher's capsule showed it; fades out as the capsule gathers into the status pill. -->
         <Grid ClipToBounds="True" IsHitTestVisible="False">
-            <Grid x:Name="Question" VerticalAlignment="Top" Margin="30,0,28,0" Opacity="0">
+            <Grid x:Name="Question" VerticalAlignment="Top" Margin="32,0,32,0" Opacity="0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="25" Opacity="0.7"
-                           Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,16,0" />
-                <TextBlock x:Name="QuestionText" Grid.Column="1" FontSize="26" Foreground="{DynamicResource TextBrush}"
+                <TextBlock Text="&#xE721;" FontFamily="{StaticResource IconFont}" FontSize="27" Opacity="0.7" Width="32" TextAlignment="Center"
+                           Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,14,0" />
+                <TextBlock x:Name="QuestionText" Grid.Column="1" FontSize="29" Foreground="{DynamicResource TextBrush}"
                            VerticalAlignment="Center" Margin="2,0,0,0" TextTrimming="CharacterEllipsis" />
             </Grid>
 
-            <Border x:Name="Status" Height="68" Padding="26,0" HorizontalAlignment="Center" VerticalAlignment="Top" Visibility="Collapsed" Opacity="0" />
+            <Border x:Name="Status" Height="76" Padding="8,0,30,0" HorizontalAlignment="Center" VerticalAlignment="Top" Visibility="Collapsed" Opacity="0" />
         </Grid>
 
         <Grid x:Name="Panel" Opacity="0" Visibility="Collapsed">
             <!-- Drag the panel by its top edge, as by a title bar. -->
-            <Border x:Name="Header" Height="52" VerticalAlignment="Top" Background="Transparent" MouseLeftButtonDown="Header_MouseLeftButtonDown" />
-            <siri:ConversationView x:Name="Chat" Margin="0,52,0,0" />
-            <Button x:Name="CloseButton" Style="{StaticResource SiriCircleButton}" Content="&#xE711;" ToolTip="닫기"
-                    HorizontalAlignment="Left" VerticalAlignment="Top" Margin="16,14,0,0" Click="Close_Click" />
-            <Button x:Name="ExpandButton" Style="{StaticResource SiriCircleButton}" Content="&#xE740;" ToolTip="대화 앱에서 열기"
-                    HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,14,16,0" Click="Expand_Click" />
+            <Border x:Name="Header" Height="58" VerticalAlignment="Top" Background="Transparent" MouseLeftButtonDown="Header_MouseLeftButtonDown" />
+            <siri:ConversationView x:Name="Chat" Margin="0,58,0,0" />
+            <Button x:Name="CloseButton" Style="{StaticResource SiriCircleButton}" Content="&#xE711;" ToolTip="닫기" Width="38" Height="38" FontSize="16"
+                    HorizontalAlignment="Left" VerticalAlignment="Top" Margin="16,10,0,0" Click="Close_Click" />
+            <Button x:Name="ExpandButton" Style="{StaticResource SiriCircleButton}" Content="&#xE740;" ToolTip="대화 앱에서 열기" Width="38" Height="38" FontSize="16"
+                    HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,10,16,0" Click="Expand_Click" />
         </Grid>
 
         <!-- Resize handles: the grabbed edge or corner follows the pointer, the opposite side stays. -->

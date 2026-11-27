@@ -19,8 +19,8 @@ internal sealed class AiProgress : StackPanel
         _ring.SetResourceReference(DotRing.DotBrushProperty, foreground);
         Children.Add(_ring);
 
-        var labels = new Grid { Margin = new Thickness(diameter < 24 ? 8 : 10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        _labels = new[] { "생각하는 중", "찾아보는 중", "확인 대기 중" }.Select((text, i) =>
+        var labels = new Grid { Margin = new Thickness(diameter < 24 ? 8 : diameter > 40 ? 16 : 10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        _labels = new[] { "생각하는 중", "찾아보는 중", "확인 대기 중", "처리 대기 중" }.Select((text, i) =>
         {
             var label = new TextBlock { Text = text, FontSize = fontSize, Visibility = i == 0 ? Visibility.Visible : Visibility.Hidden };
             label.SetResourceReference(TextBlock.ForegroundProperty, foreground);
@@ -32,7 +32,7 @@ internal sealed class AiProgress : StackPanel
 
     public void SetState(AiState state, bool awaitingConfirmation = false, bool animate = true)
     {
-        int index = awaitingConfirmation ? 2 : state == AiState.Searching ? 1 : 0;
+        int index = awaitingConfirmation ? 2 : state == AiState.Loading ? 3 : state == AiState.Searching ? 1 : 0;
         _ring.Spinning = !awaitingConfirmation;
         if (index == _active && animate) return;
         _active = index;
