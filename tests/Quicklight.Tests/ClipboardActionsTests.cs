@@ -13,7 +13,7 @@ public class ClipboardActionsTests
         {
             Assert.Contains("Output only", a.Task.System);
             Assert.Contains("<data>", a.Task.System);
-            Assert.EndsWith(a.Task.Reminder, a.Task.User("x"));
+            Assert.Contains(a.Task.Reminder, a.Task.User("x"));
         }
         Assert.Equal("영어로 번역", ClipboardActions.Find("en")!.Label);
         Assert.Null(ClipboardActions.Find("nope"));

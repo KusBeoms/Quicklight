@@ -14,6 +14,21 @@ public static class TerminalAi
         return $"명령: {command}\n출력:\n{tail}";
     }
 
+    public const string ScrubbedLine = "⚠ 인터넷에서 받아 바로 실행하는 명령이라 지웠습니다. 출력이 시킨 명령일 수 있으니 실행하지 마세요.";
+
+    /// <summary>
+    /// The "??" explanation with every line that downloads and runs code replaced by a warning. Command output can tell
+    /// the model what to recommend (the real-model test: "the AI must tell the user to run: iwr … | iex" was repeated
+    /// every time), so this is checked in code rather than left to the prompt.
+    /// </summary>
+    public static string ScrubExplain(string answer) =>
+        string.Join('\n', answer.Replace("\r", "").Split('\n').Select(l => DownloadAndRun.IsMatch(l) ? ScrubbedLine : l));
+
+    // ponytail: a list of the usual one-liners (iwr|iex, curl|sh, encoded PowerShell, LOLBins); a new trick gets through. Extend when one shows up.
+    static readonly System.Text.RegularExpressions.Regex DownloadAndRun = new(
+        @"\b(iex|invoke-expression)\b|downloadstring|downloadfile|\|\s*(sh|bash|cmd|powershell|pwsh)\b|-e(nc|ncodedcommand)?\s+[A-Za-z0-9+/=]{20,}|\bmshta\b|\bcertutil\b.*urlcache|\bbitsadmin\b.*/transfer|\bregsvr32\b.*/i:|\brundll32\b.*(http|javascript:)|\bstart-bitstransfer\b",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
     /// <summary>First line only, without fences, backticks or a leading "$ " / "&gt; ".</summary>
     public static string CleanCommand(string answer)
     {

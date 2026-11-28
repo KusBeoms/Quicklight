@@ -1801,7 +1801,7 @@ public partial class MainWindow : Window
         {
             var session = Ai!.Session;
             string answer = explain
-                ? await session.CompleteAsync(Core.Ai.Prompts.TerminalExplain, Core.Ai.TerminalAi.ExplainUser(_termCmd, _termOut.ToString()), cts.Token) ?? ""
+                ? Core.Ai.TerminalAi.ScrubExplain(await session.CompleteAsync(Core.Ai.Prompts.TerminalExplain, Core.Ai.TerminalAi.ExplainUser(_termCmd, _termOut.ToString()), cts.Token) ?? "")
                 : Core.Ai.TerminalAi.CleanCommand(await session.CompleteAsync(Core.Ai.Prompts.TerminalCommand, Core.Ai.TerminalAi.CommandUser(_terminalDir, request), cts.Token) ?? "");
             if (!_terminalOpen || cts.IsCancellationRequested) return;
             if (answer.Length == 0) { TerminalWrite("Qutra가 답하지 못했습니다.\n"); return; }
