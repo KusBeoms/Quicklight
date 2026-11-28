@@ -1,0 +1,16 @@
+// {date+N:형식} 은 실행하는 날 기준으로 계산됨 (Text.Expand).
+{"id":"date-001","cat":"date","tier":"easy","q":"오늘 +100일","expect":{"kind":"calculator","titleHas":"{date+100:yyyy년 M월 d일}"}}
+{"id":"date-002","cat":"date","tier":"easy","q":"today +7d","expect":{"kind":"calculator","titleHas":"{date+7:M월 d일}"}}
+{"id":"date-003","cat":"date","tier":"easy","q":"오늘 +1일","expect":{"kind":"calculator","titleHas":"{date+1:M월 d일}"}}
+{"id":"date-004","cat":"date","tier":"normal","q":"오늘 -30일","expect":{"kind":"calculator","titleHas":"{date-30:M월 d일}"}}
+{"id":"date-005","cat":"date","tier":"normal","q":"오늘 +3개월","expect":{"kind":"calculator","titleHas":"년"}}
+{"id":"date-006","cat":"date","tier":"normal","q":"d-day {date+27:yyyy-MM-dd}","expect":{"kind":"calculator","titleHas":"D-27"}}
+{"id":"date-007","cat":"date","tier":"normal","q":"뉴욕 시간","expect":{"kind":"calculator","subtitleHas":"뉴욕"}}
+{"id":"date-008","cat":"date","tier":"normal","q":"now tokyo","expect":{"kind":"calculator"}}
+{"id":"date-009","cat":"date","tier":"normal","q":"런던 시간","expect":{"kind":"calculator","subtitleHas":"런던"}}
+{"id":"date-010","cat":"date","tier":"hard","q":"100일 뒤","expect":{"kind":"calculator","titleHas":"{date+100:M월 d일}"}}
+{"id":"date-011","cat":"date","tier":"hard","q":"2주 뒤","expect":{"kind":"calculator","titleHas":"{date+14:M월 d일}"}}
+{"id":"date-012","cat":"date","tier":"hard","q":"내일 무슨 요일","expect":{"kind":"calculator","titleHas":"({date+1:ddd})"}}
+{"id":"date-013","cat":"date","tier":"hard","q":"크리스마스까지 며칠","expect":{"kind":"calculator","titleHas":"D-"}}
+{"id":"date-014","cat":"date","tier":"hard","q":"2027-01-01 요일","expect":{"kind":"calculator","titleHas":"금"}}
+{"id":"date-015","cat":"date","tier":"hard","q":"3일 전","expect":{"kind":"calculator","titleHas":"{date-3:M월 d일}"}}

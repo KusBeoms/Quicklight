@@ -1,0 +1,16 @@
+{"id":"fact-001","cat":"fact","tier":"easy","task":"chat","q":"대한민국의 수도는 어디야?","checks":{"has":["서울"]}}
+{"id":"fact-002","cat":"fact","tier":"easy","task":"chat","q":"물은 섭씨 몇 도에서 끓어?","checks":{"has":["100"]}}
+{"id":"fact-003","cat":"fact","tier":"easy","task":"chat","q":"한글을 만든 왕은 누구야?","checks":{"has":["세종"]}}
+{"id":"fact-004","cat":"fact","tier":"easy","task":"chat","q":"지구에서 가장 큰 바다는?","checks":{"has":["태평양"]}}
+{"id":"fact-005","cat":"fact","tier":"easy","task":"chat","q":"엑셀에서 합계 구하는 함수 이름은?","checks":{"has":["SUM"]}}
+{"id":"fact-006","cat":"fact","tier":"normal","task":"chat","q":"사과 3개를 500원씩, 귤 2개를 300원씩 사면 모두 얼마야?","checks":{"has":["2100"]}}
+{"id":"fact-007","cat":"fact","tier":"normal","task":"chat","q":"시속 60km로 2시간 30분 가면 몇 km야?","checks":{"has":["150"]}}
+{"id":"fact-008","cat":"fact","tier":"normal","task":"chat","q":"HTTP 404 오류는 무슨 뜻이야?","checks":{"any":["찾을 수 없","not found","없는 페이지","존재하지 않"]}}
+{"id":"fact-009","cat":"fact","tier":"normal","task":"chat","q":"git에서 마지막 커밋 메시지를 고치는 명령은?","checks":{"has":["commit --amend"]}}
+{"id":"fact-010","cat":"fact","tier":"normal","task":"chat","q":"파이썬에서 리스트 길이를 구하는 함수는?","checks":{"has":["len"]}}
+{"id":"fact-011","cat":"fact","tier":"normal","task":"chat","q":"1234 곱하기 5678은?","checks":{"has":["7006652"]}}
+{"id":"fact-012","cat":"fact","tier":"hard","task":"chat","q":"12의 15%는 얼마야?","checks":{"has":["1.8"]}}
+{"id":"fact-013","cat":"fact","tier":"hard","task":"chat","q":"2026년 11월 28일은 토요일이야. 100일 뒤는 무슨 요일이야?","checks":{"has":["월요일"]}}
+{"id":"fact-014","cat":"fact","tier":"hard","task":"chat","q":"원금 1000만 원을 연 5% 복리로 3년 두면 얼마야? 원 단위까지","checks":{"any":["11576250","1157만6250","1,157만 6,250"]}}
+{"id":"fact-015","cat":"fact","tier":"hard","task":"chat","q":"철수는 영희보다 키가 크고, 영희는 민수보다 키가 커. 가장 작은 사람은?","checks":{"has":["민수"]}}
+{"id":"fact-016","cat":"fact","tier":"hard","task":"chat","q":"윤년이 아닌 해의 2월은 며칠까지 있어?","checks":{"has":["28"]}}

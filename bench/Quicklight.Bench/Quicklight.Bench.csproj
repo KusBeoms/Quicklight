@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The evaluation (bench\cases to bench\results). Not part of publish.bat or dotnet test; how to run it: src\spec.md, "평가". -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Quicklight.Bench</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Include="System.IO" />
+    <Using Include="System.Text.Json" />
+    <Using Include="System.Text.Json.Nodes" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Quicklight.Core\Quicklight.Core.csproj" />
+    <ProjectReference Include="..\..\src\Quicklight.Mcp\Quicklight.Mcp.csproj" />
+  </ItemGroup>
+</Project>

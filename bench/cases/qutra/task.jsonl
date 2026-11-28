@@ -1,0 +1,34 @@
+// 실생활 단발 작업. 런처가 실제로 보내는 프롬프트(Prompts.*)와 같은 길로 부름.
+{"id":"task-001","cat":"task","tier":"easy","task":"summary","data":"회의록 (11월 20일)\n- 참석: 김 팀장, 이 대리, 박 사원\n- 3분기 매출은 목표 대비 104% 달성\n- 12월 15일까지 신규 고객 온보딩 자료 완성 (담당: 이 대리)\n- 다음 회의는 12월 2일 오후 3시","checks":{"bullets":[3,6],"lang":"ko","has":["104%","12월 15일"]}}
+{"id":"task-002","cat":"task","tier":"easy","task":"clip-summary","data":"서울시는 내년부터 지하철 2호선 일부 구간의 배차 간격을 출근 시간대 2분으로 줄인다고 밝혔다. 시는 신형 전동차 12편성을 추가로 들여오고, 혼잡도가 높은 강남역과 잠실역에는 안전 요원을 늘린다. 예산은 약 840억 원이며 상반기 안에 시운전을 마칠 계획이다.","checks":{"lang":"ko","has":["2분"],"any":["840억","전동차"],"maxChars":400}}
+{"id":"task-003","cat":"task","tier":"easy","task":"translate","lang":"English","data":"내일 회의는 오후 3시에 시작합니다.","checks":{"lang":"en","any":["meeting"],"has":["3"]}}
+{"id":"task-004","cat":"task","tier":"easy","task":"translate","lang":"Korean","data":"The package will arrive on Friday morning.","checks":{"lang":"ko","has":["금요일"]}}
+{"id":"task-005","cat":"task","tier":"easy","task":"polish","data":"i has went to the store yesterday and buyed three apple.","checks":{"lang":"en","has":["bought","apples"],"not":["buyed"]}}
+{"id":"task-006","cat":"task","tier":"easy","task":"csv","data":"이름 나이 도시\n김철수 31 서울\n이영희 27 부산","checks":{"has":["김철수,31,서울","이영희,27,부산"],"noBackticks":true}}
+{"id":"task-007","cat":"task","tier":"easy","task":"term-cmd","q":"이 폴더의 txt 파일 목록 보기","checks":{"oneLine":true,"noBackticks":true,"any":["dir","*.txt"]}}
+{"id":"task-008","cat":"task","tier":"easy","task":"file-query","q":"지난주에 받은 견적서 pdf","checks":{"has":["dm:lastweek","ext:pdf","견적서"],"oneLine":true}}
+{"id":"task-009","cat":"task","tier":"normal","task":"polish","data":"안녕하세여 이번에 보내드린 자료 확인 부탁드립니당. 궁금한거 있으면 연락주세여.","checks":{"lang":"ko","not":["안녕하세여","부탁드립니당","주세여"],"has":["자료"]}}
+{"id":"task-010","cat":"task","tier":"normal","task":"translate","lang":"Japanese","data":"감사합니다. 다음 주에 다시 연락드리겠습니다.","checks":{"lang":"ja"}}
+{"id":"task-011","cat":"task","tier":"normal","task":"translate","lang":"Chinese","data":"이 제품은 배터리가 오래갑니다.","checks":{"lang":"zh"}}
+{"id":"task-012","cat":"task","tier":"normal","task":"translate","lang":"English","data":"그 사람 진짜 눈치가 없어.","checks":{"lang":"en","not":["nunchi"]}}
+{"id":"task-013","cat":"task","tier":"normal","task":"json","data":"{name: '홍길동', age: 30, tags: ['a','b']}","checks":{"has":["\"name\"","\"홍길동\"","\"age\""],"not":["'"]}}
+{"id":"task-014","cat":"task","tier":"normal","task":"csv","data":"제품 | 가격 | 재고\n키보드 | 45,000 | 12\n마우스 | 23,000 | 40","checks":{"regex":"키보드,\\s*\"?45,?000\"?,\\s*12","noBackticks":true}}
+{"id":"task-015","cat":"task","tier":"normal","task":"term-cmd","q":"3000번 포트 쓰는 프로세스 찾기","checks":{"oneLine":true,"has":["netstat"],"any":["3000"]}}
+{"id":"task-016","cat":"task","tier":"normal","task":"term-cmd","q":"현재 폴더의 하위 폴더까지 모든 .log 파일 지우기","checks":{"oneLine":true,"any":["del /s","del /S","/s *.log"]}}
+{"id":"task-017","cat":"task","tier":"normal","task":"term-cmd","q":"내 IP 주소 확인","checks":{"oneLine":true,"has":["ipconfig"]}}
+{"id":"task-018","cat":"task","tier":"normal","task":"term-explain","cmd":"git push","data":"To https://github.com/me/app.git\n ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'https://github.com/me/app.git'\nhint: Updates were rejected because the remote contains work that you do not have locally.","checks":{"lang":"ko","any":["pull","fetch"]}}
+{"id":"task-019","cat":"task","tier":"normal","task":"term-explain","cmd":"python app.py","data":"Traceback (most recent call last):\n  File \"app.py\", line 1, in <module>\n    import requests\nModuleNotFoundError: No module named 'requests'","checks":{"lang":"ko","has":["pip install requests"]}}
+{"id":"task-020","cat":"task","tier":"normal","task":"file-query","q":"어제 만든 엑셀","checks":{"has":["dm:yesterday"],"any":["xlsx","excel"],"oneLine":true}}
+{"id":"task-021","cat":"task","tier":"normal","task":"file-query","q":"이번 달에 찍은 사진","checks":{"has":["dm:thismonth"],"any":["jpg","png","heic"]}}
+{"id":"task-022","cat":"task","tier":"normal","task":"doc-summary","doc":"docx","data":"2026년 하반기 마케팅 계획\n목표: 신규 가입자 20% 증가\n채널: 유튜브 광고, 인플루언서 협업, 오프라인 팝업스토어\n예산: 총 3억 원 (유튜브 1.5억, 인플루언서 1억, 팝업 0.5억)\n일정: 9월 기획, 10월 집행, 12월 성과 보고","checks":{"bullets":[3,6],"lang":"ko","has":["20%"],"any":["3억","유튜브"]}}
+{"id":"task-023","cat":"task","tier":"normal","task":"doc-summary","doc":"pptx","data":"분기 실적 발표\n매출 120억 원, 전년 대비 15% 성장\n영업이익률 8%\n다음 분기 목표: 해외 진출","checks":{"bullets":[3,6],"has":["120억"],"any":["15%","해외"]}}
+{"id":"task-024","cat":"task","tier":"normal","task":"doc-summary","doc":"hwpx","data":"공지사항\n12월 24일부터 26일까지 사무실 전기 공사로 출입이 제한됩니다.\n해당 기간에는 재택근무를 실시합니다.\n문의: 총무팀 내선 1234","checks":{"bullets":[3,6],"has":["재택"],"any":["12월 24일","24일"]}}
+{"id":"task-025","cat":"task","tier":"hard","task":"summary","data":"[긴 문서]\n1장. 프로젝트 배경: 고객 상담 대기 시간이 평균 14분으로 업계 평균(6분)의 두 배를 넘었다.\n2장. 원인: 상담원 1인당 하루 처리 건수가 80건으로 과부하, 반복 문의가 전체의 45%.\n3장. 해결책: FAQ 챗봇 도입으로 반복 문의의 70% 자동 응대, 상담원 교육 개편.\n4장. 기대 효과: 대기 시간 5분 이하, 연간 인건비 2억 원 절감.\n5장. 위험: 챗봇 오답으로 인한 고객 불만, 개인정보 처리 규정 검토 필요.\n6장. 일정: 1월 파일럿, 3월 전면 도입.","checks":{"bullets":[3,6],"lang":"ko","has":["14분"],"any":["챗봇","FAQ"]}}
+{"id":"task-026","cat":"task","tier":"hard","task":"translate","lang":"English","data":"본 계약은 갑과 을 사이의 상호 합의에 따라 체결되며, 어느 일방도 상대방의 서면 동의 없이 계약상 권리를 제3자에게 양도할 수 없다.","checks":{"lang":"en","any":["written consent","prior written"],"has":["third party"]}}
+{"id":"task-027","cat":"task","tier":"hard","task":"polish","data":"We was planning to launches the product on monday but the team dont have enough time so we postpone it.","checks":{"lang":"en","not":["We was","launches the product","dont"],"any":["Monday"]}}
+{"id":"task-028","cat":"task","tier":"hard","task":"csv","data":"- 사과: 3개, 1200원\n- 바나나: 2송이, 3000원\n- 우유: 1L, 2500원","checks":{"has":["사과","바나나","우유","1200","3000","2500"],"lines":[3,4],"noBackticks":true}}
+{"id":"task-029","cat":"task","tier":"hard","task":"term-cmd","q":"C드라이브에서 1GB 넘는 파일 찾기","checks":{"oneLine":true,"any":["forfiles","Get-ChildItem","where","dir"],"has":["1"]}}
+{"id":"task-030","cat":"task","tier":"hard","task":"file-query","q":"작년 여름 제주도 여행 사진","checks":{"any":["dm:2025-06..2025-08","dm:2025-07","dm:lastyear"],"has":["제주"]}}
+{"id":"task-031","cat":"task","tier":"hard","task":"file-query","q":"10MB 넘는 동영상","checks":{"has":["size:>10mb"],"any":["mp4","mov","mkv"]}}
+{"id":"task-032","cat":"task","tier":"hard","task":"term-explain","cmd":"npm run build","data":"src/App.tsx:12:5 - error TS2322: Type 'string' is not assignable to type 'number'.\n\n12     count = \"3\";\n       ~~~~~\n\nFound 1 error in src/App.tsx:12","checks":{"lang":"ko","any":["number","숫자"],"has":["App.tsx"]}}
+{"id":"task-033","cat":"task","tier":"hard","task":"json","data":"이름=김철수, 나이=31, 취미=등산,독서","checks":{"has":["\"김철수\"","31"],"any":["[","등산"]}}

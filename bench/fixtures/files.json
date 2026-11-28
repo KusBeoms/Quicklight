@@ -1,0 +1,32 @@
+{
+  "sentinel": "qlbench-sentinel-7c1f.txt",
+  "decoys": [
+    { "pattern": "업무/보고서/분기보고서_초안_v{n}.xlsx", "count": 120 },
+    { "pattern": "업무/견적/견적서_양식_{n}.pdf", "count": 150 },
+    { "pattern": "업무/회의/회의록_팀회의_{n}.docx", "count": 200 },
+    { "pattern": "개인/사진/IMG_2026{n}.jpg", "count": 400 },
+    { "pattern": "개인/사진/스크린샷 2026-10-{n}.png", "count": 120 },
+    { "pattern": "개발/프로젝트/src/module_{n}.cs", "count": 300 },
+    { "pattern": "개발/프로젝트/notes/todo_{n}.md", "count": 80 },
+    { "pattern": "다운로드/setup_tool_{n}.exe", "count": 60 },
+    { "pattern": "다운로드/계약서_사본_{n}.pdf", "count": 70 },
+    { "pattern": "학교/과제/레포트_{n}.hwp", "count": 90 }
+  ],
+  "targets": [
+    { "path": "업무/견적/견적서_한빛상사_2026년11월.pdf", "daysAgo": 5 },
+    { "path": "업무/보고서/분기보고서_3분기_최종.xlsx", "daysAgo": 20 },
+    { "path": "업무/회의/회의록_2026-11-20_기획회의.docx", "daysAgo": 8 },
+    { "path": "업무/발표/신규서비스_제안발표.pptx", "daysAgo": 30 },
+    { "path": "개인/여권사본_홍길동.jpg", "daysAgo": 200 },
+    { "path": "개인/가계부_2026.xlsx", "daysAgo": 1 },
+    { "path": "개인/사진/제주도여행_성산일출봉.jpg", "daysAgo": 90 },
+    { "path": "개발/프로젝트/README_quickbench.md", "daysAgo": 3 },
+    { "path": "개발/프로젝트/src/PaymentGatewayClient.cs", "daysAgo": 4 },
+    { "path": "다운로드/임대차계약서_서명본.pdf", "daysAgo": 12 },
+    { "path": "학교/과제/운영체제_과제2_보고서.hwp", "daysAgo": 6 },
+    { "path": "학교/과제/Data Structures HW3.pdf", "daysAgo": 9 },
+    { "path": "음악/Lofi Study Mix 01.mp3", "daysAgo": 40 },
+    { "path": "동영상/돌잔치_하이라이트.mp4", "daysAgo": 300 },
+    { "path": "업무/서식/연차신청서.hwpx", "daysAgo": 60 }
+  ]
+}

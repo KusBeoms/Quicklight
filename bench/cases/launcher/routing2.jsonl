@@ -1,0 +1,122 @@
+// suite 2: 라우팅 확장. route: ai ("Qutra에게 묻기"), file (Qutra 파일 찾기), translate (번역 카드), none (검색만).
+// ai: 질문이나 부탁 (한국어)
+{"id":"route-041","cat":"routing","tier":"easy","q":"오늘 저녁 메뉴 추천해줘","route":"ai"}
+{"id":"route-042","cat":"routing","tier":"easy","q":"스트레스 푸는 방법","route":"ai"}
+{"id":"route-043","cat":"routing","tier":"easy","q":"점심 뭐 먹을까","route":"ai"}
+{"id":"route-044","cat":"routing","tier":"easy","q":"MBTI가 뭐야","route":"ai"}
+{"id":"route-045","cat":"routing","tier":"easy","q":"세계에서 제일 높은 산은?","route":"ai"}
+{"id":"route-046","cat":"routing","tier":"easy","q":"엑셀에서 중복 제거하는 법","route":"ai"}
+{"id":"route-047","cat":"routing","tier":"normal","q":"자소서 첫 문장 어떻게 시작해","route":"ai"}
+{"id":"route-048","cat":"routing","tier":"normal","q":"이메일 답장 써줘","route":"ai"}
+{"id":"route-049","cat":"routing","tier":"normal","q":"파이썬이랑 자바 뭐가 달라","route":"ai"}
+{"id":"route-050","cat":"routing","tier":"normal","q":"왜 고양이는 상자를 좋아해","route":"ai"}
+{"id":"route-051","cat":"routing","tier":"normal","q":"윈도우 느려졌을 때 해결법","route":"ai"}
+{"id":"route-052","cat":"routing","tier":"normal","q":"블루투스 이어폰 연결이 안 돼","route":"ai"}
+{"id":"route-053","cat":"routing","tier":"normal","q":"회의록 양식 만들어줘","route":"ai"}
+{"id":"route-054","cat":"routing","tier":"normal","q":"이 문장 맞춤법 확인해줘","route":"ai"}
+{"id":"route-055","cat":"routing","tier":"normal","q":"아이폰이랑 갤럭시 중 뭐 사","route":"ai"}
+{"id":"route-056","cat":"routing","tier":"normal","q":"운동 루틴 짜줘","route":"ai"}
+{"id":"route-057","cat":"routing","tier":"normal","q":"강아지 이름 지어줘","route":"ai"}
+{"id":"route-058","cat":"routing","tier":"normal","q":"부산 2박 3일 여행 코스","route":"ai"}
+{"id":"route-059","cat":"routing","tier":"normal","q":"자바스크립트 클로저 설명","route":"ai"}
+{"id":"route-060","cat":"routing","tier":"normal","q":"git rebase랑 merge 차이","route":"ai"}
+{"id":"route-061","cat":"routing","tier":"normal","q":"감기 빨리 낫는 법","route":"ai"}
+{"id":"route-062","cat":"routing","tier":"normal","q":"오늘 날씨 어때","route":"ai"}
+{"id":"route-063","cat":"routing","tier":"hard","q":"근로기준법 연차 계산","route":"ai"}
+{"id":"route-064","cat":"routing","tier":"hard","q":"1분기 매출 보고서 개요 좀","route":"ai"}
+{"id":"route-065","cat":"routing","tier":"hard","q":"SQL 조인 종류 정리","route":"ai"}
+{"id":"route-066","cat":"routing","tier":"hard","q":"다이어트 식단 일주일치","route":"ai"}
+{"id":"route-067","cat":"routing","tier":"hard","q":"면접에서 단점 물어보면","route":"ai"}
+{"id":"route-068","cat":"routing","tier":"hard","q":"전세랑 월세 장단점","route":"ai"}
+{"id":"route-069","cat":"routing","tier":"hard","q":"지구는 왜 둥글지","route":"ai"}
+{"id":"route-070","cat":"routing","tier":"hard","q":"내일 서울 비 오나요","route":"ai"}
+// ai: 질문이나 부탁 (영어)
+{"id":"route-071","cat":"routing","tier":"easy","q":"how do I reset my password","route":"ai"}
+{"id":"route-072","cat":"routing","tier":"easy","q":"why is the sky blue","route":"ai"}
+{"id":"route-073","cat":"routing","tier":"easy","q":"explain recursion simply","route":"ai"}
+{"id":"route-074","cat":"routing","tier":"normal","q":"write a haiku about autumn","route":"ai"}
+{"id":"route-075","cat":"routing","tier":"normal","q":"what is the difference between tcp and udp","route":"ai"}
+{"id":"route-076","cat":"routing","tier":"normal","q":"can you help me with excel formulas","route":"ai"}
+{"id":"route-077","cat":"routing","tier":"normal","q":"tell me a joke","route":"ai"}
+{"id":"route-078","cat":"routing","tier":"normal","q":"give me ideas for a birthday party","route":"ai"}
+{"id":"route-079","cat":"routing","tier":"hard","q":"Is coffee bad for you?","route":"ai"}
+{"id":"route-080","cat":"routing","tier":"hard","q":"best way to learn piano as an adult","route":"ai"}
+// none: 질문처럼 보이는 앱, 곡, 영화, 프로그램 이름
+{"id":"route-081","cat":"routing","tier":"normal","q":"Get Help","route":"none"}
+{"id":"route-082","cat":"routing","tier":"normal","q":"Get Started","route":"none"}
+{"id":"route-083","cat":"routing","tier":"normal","q":"What's New","route":"none"}
+{"id":"route-084","cat":"routing","tier":"hard","q":"Where's My Water","route":"none"}
+{"id":"route-085","cat":"routing","tier":"hard","q":"How to Train Your Dragon","route":"none"}
+{"id":"route-086","cat":"routing","tier":"hard","q":"When Harry Met Sally","route":"none"}
+{"id":"route-087","cat":"routing","tier":"hard","q":"Is This It","route":"none"}
+{"id":"route-088","cat":"routing","tier":"hard","q":"Tell Me Why","route":"none"}
+{"id":"route-089","cat":"routing","tier":"hard","q":"What If","route":"none"}
+{"id":"route-090","cat":"routing","tier":"hard","q":"무엇이든 물어보살","route":"none"}
+{"id":"route-091","cat":"routing","tier":"hard","q":"왜 오수재인가","route":"none"}
+// none: 앱 이름
+{"id":"route-092","cat":"routing","tier":"easy","q":"vscode","route":"none"}
+{"id":"route-093","cat":"routing","tier":"easy","q":"포토샵","route":"none"}
+{"id":"route-094","cat":"routing","tier":"easy","q":"엑셀","route":"none"}
+{"id":"route-095","cat":"routing","tier":"easy","q":"한글","route":"none"}
+{"id":"route-096","cat":"routing","tier":"easy","q":"디스코드","route":"none"}
+{"id":"route-097","cat":"routing","tier":"easy","q":"Microsoft Teams","route":"none"}
+{"id":"route-098","cat":"routing","tier":"easy","q":"Adobe Premiere Pro","route":"none"}
+{"id":"route-099","cat":"routing","tier":"normal","q":"파워포인트","route":"none"}
+{"id":"route-100","cat":"routing","tier":"normal","q":"OBS Studio","route":"none"}
+{"id":"route-101","cat":"routing","tier":"normal","q":"Visual Studio 2022","route":"none"}
+// none: 설정, 명령, 계산, 단위, 날짜, 환율, 타이머
+{"id":"route-102","cat":"routing","tier":"easy","q":"디스플레이 설정","route":"none"}
+{"id":"route-103","cat":"routing","tier":"easy","q":"다크 모드","route":"none"}
+{"id":"route-104","cat":"routing","tier":"easy","q":"볼륨 30","route":"none"}
+{"id":"route-105","cat":"routing","tier":"easy","q":"3+4","route":"none"}
+{"id":"route-106","cat":"routing","tier":"easy","q":"2^10","route":"none"}
+{"id":"route-107","cat":"routing","tier":"easy","q":"10km to mi","route":"none"}
+{"id":"route-108","cat":"routing","tier":"easy","q":"오늘 +30일","route":"none"}
+{"id":"route-109","cat":"routing","tier":"easy","q":"50달러","route":"none"}
+{"id":"route-110","cat":"routing","tier":"easy","q":"10분 타이머","route":"none"}
+{"id":"route-111","cat":"routing","tier":"normal","q":"sqrt(2)","route":"none"}
+{"id":"route-112","cat":"routing","tier":"hard","q":"100 나누기 8","route":"none"}
+{"id":"route-113","cat":"routing","tier":"hard","q":"1마일은 몇 km","route":"none"}
+{"id":"route-114","cat":"routing","tier":"hard","q":"크리스마스까지 며칠","route":"none"}
+{"id":"route-115","cat":"routing","tier":"hard","q":"100달러는 몇 원이야","route":"none"}
+{"id":"route-116","cat":"routing","tier":"hard","q":"200의 15%는?","route":"none"}
+// none: 경로, URL, 파일 이름, 한 단어
+{"id":"route-117","cat":"routing","tier":"easy","q":"C:\\Users","route":"none"}
+{"id":"route-118","cat":"routing","tier":"easy","q":"naver.com","route":"none"}
+{"id":"route-119","cat":"routing","tier":"easy","q":"https://github.com","route":"none"}
+{"id":"route-120","cat":"routing","tier":"easy","q":"보고서.docx","route":"none"}
+{"id":"route-121","cat":"routing","tier":"easy","q":"IMG_1234.jpg","route":"none"}
+{"id":"route-122","cat":"routing","tier":"easy","q":"*.pdf","route":"none"}
+{"id":"route-123","cat":"routing","tier":"normal","q":"ext:pdf 견적서","route":"none"}
+{"id":"route-124","cat":"routing","tier":"normal","q":"견적서","route":"none"}
+{"id":"route-125","cat":"routing","tier":"normal","q":"README.md","route":"none"}
+{"id":"route-126","cat":"routing","tier":"normal","q":"왜","route":"none"}
+{"id":"route-127","cat":"routing","tier":"normal","q":"how","route":"none"}
+{"id":"route-128","cat":"routing","tier":"normal","q":"번역","route":"none"}
+{"id":"route-129","cat":"routing","tier":"hard","q":"뭐","route":"none"}
+{"id":"route-130","cat":"routing","tier":"hard","q":"어디","route":"none"}
+// file: 자연어 파일 찾기
+{"id":"route-131","cat":"routing","tier":"easy","q":"어제 받은 엑셀 파일","route":"file"}
+{"id":"route-132","cat":"routing","tier":"easy","q":"지난주에 수정한 보고서","route":"file"}
+{"id":"route-133","cat":"routing","tier":"easy","q":"이번 달에 찍은 사진","route":"file"}
+{"id":"route-134","cat":"routing","tier":"normal","q":"최근에 다운받은 pdf","route":"file"}
+{"id":"route-135","cat":"routing","tier":"normal","q":"작년에 만든 발표 자료","route":"file"}
+{"id":"route-136","cat":"routing","tier":"normal","q":"오늘 저장한 한글 문서","route":"file"}
+{"id":"route-137","cat":"routing","tier":"normal","q":"3월에 찍은 동영상","route":"file"}
+{"id":"route-138","cat":"routing","tier":"normal","q":"어제 찍은 스크린샷","route":"file"}
+{"id":"route-139","cat":"routing","tier":"hard","q":"10MB 넘는 동영상","route":"file"}
+{"id":"route-140","cat":"routing","tier":"hard","q":"올해 받은 계약서 전부","route":"file"}
+{"id":"route-141","cat":"routing","tier":"hard","q":"pdf I downloaded yesterday","route":"file"}
+{"id":"route-142","cat":"routing","tier":"hard","q":"photos from last summer","route":"file"}
+// translate: 번역
+{"id":"route-143","cat":"routing","tier":"easy","q":"번역 good morning","route":"translate"}
+{"id":"route-144","cat":"routing","tier":"easy","q":"감사합니다 영어로","route":"translate"}
+{"id":"route-145","cat":"routing","tier":"easy","q":"hello 한국어로","route":"translate"}
+{"id":"route-146","cat":"routing","tier":"normal","q":"tr 고마워","route":"translate"}
+{"id":"route-147","cat":"routing","tier":"normal","q":"translate thank you to korean","route":"translate"}
+{"id":"route-148","cat":"routing","tier":"normal","q":"사랑해 중국어로","route":"translate"}
+{"id":"route-149","cat":"routing","tier":"normal","q":"good night 번역","route":"translate"}
+{"id":"route-150","cat":"routing","tier":"hard","q":"번역: 오늘 회의는 취소되었습니다","route":"translate"}
+{"id":"route-151","cat":"routing","tier":"hard","q":"bonjour 한국어로","route":"translate"}
+{"id":"route-152","cat":"routing","tier":"hard","q":"hello to japanese","route":"translate"}
+{"id":"route-153","cat":"routing","tier":"hard","q":"안녕 영어로 뭐라고 해","route":"translate"}

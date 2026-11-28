@@ -397,8 +397,13 @@ public sealed partial class AiSession : IDisposable
             Log.Error($"ai server {(int)resp.StatusCode}: {(json.Length > 300 ? json[..300] : json)}");
             throw new InvalidOperationException($"AI 서버 오류 {(int)resp.StatusCode}");
         }
-        return JsonNode.Parse(json)?["choices"]?[0]?["message"] as JsonObject ?? throw new InvalidOperationException("AI 서버 응답을 읽지 못했습니다.");
+        var root = JsonNode.Parse(json);
+        LastTimings = root?["timings"] as JsonObject; // llama-server: prompt_ms, predicted_ms, predicted_per_second … (the benchmark reads it)
+        return root?["choices"]?[0]?["message"] as JsonObject ?? throw new InvalidOperationException("AI 서버 응답을 읽지 못했습니다.");
     }
+
+    /// <summary>llama-server's timings for the last model call, or null (a fake handler, an old server).</summary>
+    public JsonObject? LastTimings { get; private set; }
 
     [GeneratedRegex(@"<think>.*?</think>", RegexOptions.Singleline)]
     private static partial Regex Think();

@@ -1,0 +1,10 @@
+{"id":"chat-001","cat":"chat","tier":"easy","task":"chat","q":"너는 누구야?","checks":{"any":["Qutra","큐트라","쿼트라"],"lang":"ko","noTools":true}}
+{"id":"chat-002","cat":"chat","tier":"easy","task":"chat","q":"안녕","checks":{"lang":"ko","not":["Qwen","알리바바","Alibaba"],"maxChars":300}}
+{"id":"chat-003","cat":"chat","tier":"easy","task":"chat","q":"이 파일 뭐야?","context":"앞 창: 파일 탐색기 - 문서 (explorer.exe)\n탐색기 선택: C:\\Users\\me\\Documents\\임대차계약서_서명본.pdf\n선택한 글: 없음","checks":{"firstTool":"get_context","has":["계약서"]}}
+{"id":"chat-004","cat":"chat","tier":"normal","task":"chat","q":"이 오류 무슨 뜻이야?","screen":"화면에서 읽은 글자:\n설치 실패\n오류 0x80070005: 액세스가 거부되었습니다.\n[확인]","checks":{"toolAny":[{"name":"look_at_screen"},{"name":"get_context"}],"any":["권한","관리자"]}}
+{"id":"chat-005","cat":"chat","tier":"normal","task":"chat","q":"선택한 문장 영어로 바꿔줘","context":"앞 창: 메모장 - 메모.txt (notepad.exe)\n탐색기 선택: 없음\n선택한 글: 오늘 회의는 취소되었습니다.","checks":{"firstTool":"get_context","any":["canceled","cancelled"]}}
+{"id":"chat-006","cat":"chat","tier":"normal","task":"chat","turns":["내 이름은 지수야. 기억해 둬.","내 이름이 뭐라고 했지?"],"checks":{"has":["지수"]}}
+{"id":"chat-007","cat":"chat","tier":"normal","task":"chat","q":"첨부한 파일 세 줄로 요약해줘","attach":"주간 보고\n- 로그인 오류 수정 배포 완료\n- 결제 모듈 성능 30% 개선\n- 다음 주: 알림 기능 개발 시작","checks":{"has":["30%"],"any":["로그인","결제"]}}
+{"id":"chat-008","cat":"chat","tier":"hard","task":"chat","turns":["파이썬으로 리스트 뒤집는 법 알려줘","그럼 자바스크립트는?"],"checks":{"has":["reverse"]}}
+{"id":"chat-009","cat":"chat","tier":"hard","task":"chat","q":"마크다운 제목 없이 세 가지 팁만 짧게: 집중력 높이는 법","checks":{"notRegex":"^#","lang":"ko","maxChars":600}}
+{"id":"chat-010","cat":"chat","tier":"hard","task":"chat","q":"이 화면에 있는 표 내용 정리해줘","screen":"화면에서 읽은 글자:\n월 매출 비용\n1월 1200 800\n2월 1500 900\n3월 1100 950","checks":{"tool":{"name":"look_at_screen"},"has":["1500"]}}

@@ -1,0 +1,15 @@
+// 오류 없이, 제한 시간(ms) 안에 끝나기만 하면 통과.
+{"id":"robust-001","cat":"robust","tier":"easy","q":" ","maxMs":500}
+{"id":"robust-002","cat":"robust","tier":"easy","q":"😀🔥","maxMs":3000}
+{"id":"robust-003","cat":"robust","tier":"normal","q":"가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가","maxMs":3000}
+{"id":"robust-004","cat":"robust","tier":"normal","q":"\\\\nonexistent-ql-bench-server\\share","maxMs":3000}
+{"id":"robust-005","cat":"robust","tier":"normal","q":"((((((((((1))))))))))","maxMs":1000}
+{"id":"robust-006","cat":"robust","tier":"normal","q":"1/0","maxMs":1000}
+{"id":"robust-007","cat":"robust","tier":"normal","q":"9999999999999999999*99999999999","maxMs":1000}
+{"id":"robust-008","cat":"robust","tier":"normal","q":"'; DROP TABLE apps; --","maxMs":3000}
+{"id":"robust-009","cat":"robust","tier":"normal","q":"*.*","maxMs":3000}
+{"id":"robust-010","cat":"robust","tier":"hard","q":"%%%%%%","maxMs":3000}
+{"id":"robust-011","cat":"robust","tier":"hard","q":"ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ","maxMs":3000}
+{"id":"robust-012","cat":"robust","tier":"hard","q":"C:\\$Recycle.Bin\\","maxMs":3000}
+{"id":"robust-013","cat":"robust","tier":"hard","q":"regex:.*","maxMs":3000}
+{"id":"robust-014","cat":"robust","tier":"hard","q":"sin(sin(sin(sin(sin(sin(1))))))^99","maxMs":1000}

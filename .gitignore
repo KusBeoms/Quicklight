@@ -11,3 +11,4 @@ TestResults/
 .private/
 CLAUDE.md
 RELEASE.md
+bench/results/

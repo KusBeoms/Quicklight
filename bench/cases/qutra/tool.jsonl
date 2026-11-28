@@ -1,0 +1,23 @@
+// 기능 부르기: 맞는 도구를 맞는 인자로. 도구는 기록만 되고 실제로는 아무 일도 일어나지 않음.
+{"id":"tool-001","cat":"tool","tier":"easy","task":"chat","q":"10분 타이머 맞춰줘","checks":{"toolAny":[{"name":"set_timer","args":{"minutes":10}},{"name":"set_timer","args":{"seconds":600}}]}}
+{"id":"tool-002","cat":"tool","tier":"easy","task":"chat","q":"볼륨 20으로 해줘","checks":{"tool":{"name":"system_control","args":{"action":"volume_set","value":20}}}}
+{"id":"tool-003","cat":"tool","tier":"easy","task":"chat","q":"블루투스 꺼줘","checks":{"tool":{"name":"system_control","args":{"action":"bluetooth_off"}}}}
+{"id":"tool-004","cat":"tool","tier":"easy","task":"chat","q":"다크 모드로 바꿔줘","checks":{"tool":{"name":"system_control","args":{"action":"dark_mode"}}}}
+{"id":"tool-005","cat":"tool","tier":"easy","task":"chat","q":"음소거 해줘","checks":{"tool":{"name":"system_control","args":{"action":"mute"}}}}
+{"id":"tool-006","cat":"tool","tier":"easy","task":"chat","q":"와이파이 켜줘","checks":{"tool":{"name":"system_control","args":{"action":"wifi_on"}}}}
+{"id":"tool-007","cat":"tool","tier":"normal","task":"chat","q":"10분 뒤에 빨래 꺼내라고 알려줘","checks":{"toolAny":[{"name":"set_timer","args":{"minutes":10,"label":"빨래"}},{"name":"set_reminder","args":{"minutes_from_now":10,"message":"빨래"}}]}}
+{"id":"tool-008","cat":"tool","tier":"normal","task":"chat","q":"소리 좀 줄여줘","checks":{"toolAny":[{"name":"system_control","args":{"action":"volume_change","value":"<0"}},{"name":"system_control","args":{"action":"volume_set"}}]}}
+{"id":"tool-009","cat":"tool","tier":"normal","task":"chat","q":"내일 오전 9시에 약 먹으라고 알려줘","checks":{"tool":{"name":"set_reminder","args":{"at":"{today+1}T09:00","message":"약"}}}}
+{"id":"tool-010","cat":"tool","tier":"normal","task":"chat","q":"예약된 타이머 뭐 있어?","checks":{"tool":{"name":"list_timers"}}}
+{"id":"tool-011","cat":"tool","tier":"normal","task":"chat","q":"1시간 30분 타이머","checks":{"toolAny":[{"name":"set_timer","args":{"minutes":90}},{"name":"set_timer","args":{"seconds":5400}}]}}
+{"id":"tool-012","cat":"tool","tier":"normal","task":"chat","q":"메모장 열어줘","checks":{"toolAny":[{"name":"open","args":{"target":"메모장"}},{"name":"open","args":{"target":"notepad"}}]}}
+{"id":"tool-013","cat":"tool","tier":"normal","task":"chat","q":"내 PC에서 견적서 pdf 찾아줘","checks":{"toolAny":[{"name":"search_files","args":{"query":"견적서"}},{"name":"search","args":{"query":"견적서"}}]}}
+{"id":"tool-014","cat":"tool","tier":"normal","task":"chat","q":"지금 열린 창 뭐 있어?","checks":{"tool":{"name":"list_windows"}}}
+{"id":"tool-015","cat":"tool","tier":"normal","task":"chat","q":"최근에 연 파일 보여줘","checks":{"tool":{"name":"recent_files"}}}
+{"id":"tool-016","cat":"tool","tier":"normal","task":"chat","q":"방금 정리한 거 되돌려줘","checks":{"tool":{"name":"undo_last_organize"}}}
+{"id":"tool-017","cat":"tool","tier":"hard","task":"chat","q":"10분 타이머 맞추고 볼륨 30으로 해줘","checks":{"tool":[{"name":"set_timer"},{"name":"system_control","args":{"action":"volume_set","value":30}}]}}
+{"id":"tool-018","cat":"tool","tier":"hard","task":"chat","q":"3시 회의 알림 취소해줘","toolResults":{"list_timers":"id=t1  15:00  회의\nid=t2  18:30  운동"},"checks":{"firstTool":"list_timers","tool":{"name":"cancel_timer","args":{"id":"t1"}}}}
+{"id":"tool-019","cat":"tool","tier":"hard","task":"chat","q":"C:\\Users\\me\\Downloads 폴더를 파일 종류별로 정리해줘","toolResults":{"list_folder":"C:\\Users\\me\\Downloads\n- 보고서.docx  20KB  2026-11-01\n- 사진1.jpg  2MB  2026-11-02\n- 사진2.png  1MB  2026-11-03\n- setup.exe  50MB  2026-10-30\n- 계약서.pdf  300KB  2026-11-05"},"checks":{"firstTool":"list_folder","tool":{"name":"organize"}}}
+{"id":"tool-020","cat":"tool","tier":"hard","task":"chat","q":"도쿄는 지금 몇 시야?","checks":{"tool":{"name":"date_calc","args":{"query":"tokyo"}}}}
+{"id":"tool-021","cat":"tool","tier":"hard","task":"chat","q":"100달러가 원화로 얼마야?","checks":{"tool":{"name":"convert_currency"}}}
+{"id":"tool-022","cat":"tool","tier":"hard","task":"chat","q":"라이트 모드로 하고 블루투스도 켜줘","checks":{"tool":[{"name":"system_control","args":{"action":"light_mode"}},{"name":"system_control","args":{"action":"bluetooth_on"}}]}}

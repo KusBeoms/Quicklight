@@ -14,6 +14,7 @@ src/Quicklight.Core    검색 엔진 (UI 없음)
 src/Quicklight         WPF 런처 (단축키, 창, 애니메이션, 트레이, 설정 창). Program.cs 가 --mcp 면 MCP 서버로 실행
 src/Quicklight.Mcp     MCP 서버 라이브러리
 tests/Quicklight.Tests xUnit 테스트
+bench/                 종합 평가 (아래 "평가"): Quicklight.Bench, cases, fixtures, results
 ```
 
 ## 구현 메모
@@ -95,6 +96,31 @@ publish.bat 0.2.0                                      :: 테스트 후 버전 0
 powershell -ExecutionPolicy Bypass -File install.ps1   :: dist\Quicklight.exe 를 %LOCALAPPDATA%\Programs\Quicklight 에 설치하고 실행한 뒤 dist\Quicklight.exe 를 지움
 ```
 
+## 평가
+
+버전마다 런처와 Qutra 를 같은 문항으로 채점해 점수(0~100)와 속도를 남깁니다. 단위 테스트(`dotnet test`)와 `publish.bat` 과는 따로 돌립니다.
+
+```bat
+dotnet run --project bench\Quicklight.Bench -c Release -- run              :: 전부 (런처 약 1.5분 + Qutra 약 60분), results\v<버전>.json / bench-v<버전>-launcher.png, -qutra.png / history.json
+dotnet run --project bench\Quicklight.Bench -c Release -- run --launcher   :: 모델 없이 런처만
+dotnet run --project bench\Quicklight.Bench -c Release -- run --qutra      :: Qutra 만
+dotnet run --project bench\Quicklight.Bench -c Release -- run --quick      :: 1번씩, Qutra 는 항목마다 3문항 (results\quick, 이력에 안 남음)
+dotnet run --project bench\Quicklight.Bench -c Release -- run --exe <경로>  :: 아무 Quicklight.exe(예전 릴리스도)의 런처를 MCP 로 채점
+dotnet run --project bench\Quicklight.Bench -c Release -- run --only calc-  :: id 가 이것으로 시작하는 문항만
+dotnet run --project bench\Quicklight.Bench -c Release -- image bench\results\v1.2.0.json   :: 이미지만 다시
+```
+
+- **문항** (`bench\cases`): 한 줄에 한 문항인 JSON Lines. `id`, `cat`(항목), `tier`(easy/normal/hard) 와 종류별 필드. 문항만 늘리면 되고 코드는 그대로입니다. `suite.json` 에 문항 세트 버전, 항목 이름·가중치·런처/Qutra 구분, 속도 목표, 반복 횟수(5)가 있습니다. 문항이나 가중치를 바꾸면 `version` 을 올립니다(점수가 앞 버전과 직접 비교되지 않음을 결과에 표시).
+  - 런처 문항: `q` 와 `expect`(`kind`, `titleHas`, `titleAny`, `subtitleHas`, `targetHas`, `action`, `rank`: 그 순위 안에 맞는 결과가 있으면 통과). `routing` 은 `route`(ai/file/translate/none), `robust` 는 `maxMs` 안에 오류 없이 끝나면 통과. `{date+100:yyyy년 M월 d일}`, `{today+1}` 은 실행하는 날 기준으로 바뀝니다.
+  - Qutra 문항: `task`(summary, clip-summary, polish, csv, json, translate+`lang`, term-cmd, term-explain+`cmd`, file-query, doc-summary+`doc`, chat)와 `data`/`q`/`turns`, 대화용 `context`(get_context 결과), `screen`(look_at_screen 결과), `attach`(첨부 글), `toolResults`(도구별 돌려줄 글), `consent`(`deny` 면 확인을 거절). `checks` 는 모두 맞아야 통과: `has`, `any`, `not`(공백·쉼표 무시, 대소문자 무시), `regex`, `notRegex`, `lang`(ko/en/ja/zh), `bullets`, `lines`, `oneLine`, `noBackticks`, `maxChars`, `tool`/`toolAny`(이름과 인자 일부, 숫자는 같음, `"<0"`), `firstTool`, `noTool`, `noTools`, `asked`. 판정에 AI 를 쓰지 않아 답이 바뀔 때만 점수가 바뀝니다.
+  - `holdout\` 은 숨김 세트입니다. 프롬프트를 고칠 때 보지 않고, 공개 문항보다 15점 넘게 낮으면 "프롬프트가 문항에 맞춰졌을 수 있음" 경고를 냅니다.
+  - 지금 못 하는 일(한국어로 쓴 계산, "100일 뒤", 오타 앱 이름, 복합 요청 등)을 일부러 넣어 둡니다. 기능이 생기면 점수가 올라가도록, 그리고 만점에 묶이지 않도록입니다. 한 항목이 두 번 연속 95점 이상이면 "어려운 문항 필요" 경고가 나옵니다.
+- **런처**: 기본은 소스의 `SearchEngine` 을 프로세스 안에서 앱과 똑같은 공급자(Qutra 행, 타이머 포함)로 만들어 씁니다. 설정은 기본값(`AiEnabled` 켬), 사용 기록은 메모리, 앱 목록 DB와 환율 캐시는 임시 폴더 사본(환율은 갱신하지 않음)이라 사용자 데이터에 아무것도 쓰지 않습니다. 파일 찾기는 `bench\fixtures\files.json` 대로 `%TEMP%\ql-bench` 에 대상 15개와 비슷한 이름의 미끼 1,590개를 만들고, Everything 이 색인할 때까지(최대 1분) 기다린 뒤 찾고, 끝나면 지웁니다. 문항마다 전체 검색 1번의 시간과, 파일 단계 없는 검색(`FileStage.None`, 계산·단위·날짜처럼 바로 보이는 답) 1번의 시간을 "즉시 답" 시간으로 잽니다. 문항이 수백 개라 p50/p95 는 문항들 사이의 분포로 충분하고, 런처 평가가 약 1분 20초에 끝납니다 (전체 검색 한 번이 약 250ms). `--exe` 는 `--mcp --read-only --no-history` 로 띄운 exe 에 MCP `search` 를 보내므로(열기·기록 불가) 예전 릴리스도 같은 문항으로 채점할 수 있고, MCP 에 없는 타이머 행과 Qutra 판단(`routing`, `timer`)은 빠집니다.
+- **Qutra**: 시험 전용 `AiSession`(llama-server 를 따로 띄우고 끝나면 끔)에 앱과 같은 도구 목록(MCP 도구, `LauncherTools`, `FileOrganizerTools`, 화면 도구 정의)을 기록기(`Recorder`)로 감싸 줍니다. 모든 호출을 기록하고, 실제로 실행하는 것은 계산만 하는 도구(calculate, convert_unit, date_calc, convert_currency)뿐입니다. 이 PC를 읽는 도구(search, search_files, recent_files, list_windows)는 가짜 PC(`FakePc`)의 앱·파일·창 목록으로 답해, 결과가 어느 PC에서나 같고 사용자의 파일 이름이나 창이 (공개되는) 결과에 들어가지 않습니다. 런처 결과에도 시험 파일이 아닌 파일·폴더는 "(이 PC의 파일)" 로만 남깁니다. 타이머, 볼륨, 블루투스, 파일 이동, 열기는 일어나지 않습니다. 단발 작업은 런처와 같은 `Prompts.*` 와 후처리(`CleanCommand`, `ScrubExplain`, `CleanQuery`, `DocumentText.Extract`)를 거칩니다. 온도 0.7 이라 문항마다 5번 돌립니다. 속도는 답까지 걸린 시간과 llama-server 의 `timings.predicted_per_second`(`AiSession.LastTimings`), 모델 준비 시간입니다. 모델이 없으면 Qutra 는 건너뜁니다. PDF 문항은 PDF 읽기가 설치되어 있을 때만 돕니다.
+- **점수**: 문항 점수는 반복 중 통과 비율, 항목 점수는 문항 평균(×100), 항목별 쉬움/보통/어려움 점수도 따로 냅니다. 반복마다의 항목 점수로 95% 범위(±)를 구하고, 앞 버전과의 차이가 두 범위의 합(최소 1점)을 넘을 때만 ▲▼, 아니면 ≈ 로 씁니다. 속도 점수는 `min(100, 100 × 목표 / p95)`(초당 토큰은 `p50 / 목표`)입니다. 종합은 `suite.json` 가중치의 가중 평균이며 돌지 않은 부분은 빠집니다. 비교 대상은 `results` 에서 이번보다 낮은 버전 중 가장 새 것입니다. CPU, GPU, RAM, 모델 파일, llama-server 가 다르면 속도는 비교하지 않는다고 표시합니다.
+- **이미지** (`results\bench-v<버전>-launcher.png`, `bench-v<버전>-qutra.png`): 런처와 Qutra 를 한 장씩 따로, WPF(`RenderTargetBitmap`)로 1600px 폭을 2배 해상도로 그립니다. 각 장의 종합 점수는 그 부분 항목만의 가중 평균(`RunResult.Parts`)이고 이력도 그 점수입니다. 머리말(버전, 날짜, 문항 세트, PC), 종합 점수와 변화, 항목별 막대(이번/이전, 95% 범위, 난이도별), 속도 표, 최근 10개 버전의 종합 점수 그래프, 가장 많이 오르고 내린 문항, 경고.
+- `bench\results\` 는 커밋하지 않습니다 (`.gitignore`). 결과에는 이 PC 의 앱 이름과 사양이 들어가고, 이력과 앞 버전 비교는 이 PC 에서만 씁니다. 이미지는 릴리스에 첨부해서 남깁니다.
+
 ## 업데이트
 
 확인 주기: 시작 30초 뒤와 6시간마다 GitHub 최신 릴리스(`updateRepository`)를 확인합니다. 설치는 다음 순서로 진행됩니다.
@@ -107,7 +133,8 @@ powershell -ExecutionPolicy Bypass -File install.ps1   :: dist\Quicklight.exe �
 ### 릴리스 올리는 법
 
 1. `publish.bat` 으로 패키징합니다 (버전을 생략하면 `Directory.Build.props` 의 버전). 버전 번호를 exe에 기록하고, `Quicklight.exe.sig` 를 만들어 둘을 `dist\Quicklight_v0.2.0.zip` 으로 묶습니다.
-2. GitHub에서 태그 `v0.2.0` 으로 릴리스를 만들고 `dist\Quicklight_v0.2.0.zip` 을 첨부합니다. 본문에는 `RELEASE.md` 의 해당 버전 절을 붙여 넣습니다. 파일 이름은 `Quicklight_v버전.zip` 형식이어야 합니다 (`Quicklight.zip` 도 받습니다). 초안(draft)과 사전 릴리스(pre-release)는 업데이트 대상에서 빠집니다.
+2. 평가를 돌려 `bench\results\bench-v0.2.0-launcher.png` 와 `bench-v0.2.0-qutra.png` 를 만듭니다 (위 "평가").
+3. GitHub에서 태그 `v0.2.0` 으로 릴리스를 만들고 `dist\Quicklight_v0.2.0.zip` 과 두 이미지를 첨부합니다. 업데이트는 zip 만 보므로 이미지는 상관없습니다. `RELEASE.md` 의 절 맨 끝에 `![런처 평가](https://github.com/<저장소>/releases/download/v0.2.0/bench-v0.2.0-launcher.png)` 와 `-qutra.png` 줄을 두면 본문에 두 이미지가 보입니다. 본문에는 `RELEASE.md` 의 해당 버전 절을 붙여 넣습니다. 파일 이름은 `Quicklight_v버전.zip` 형식이어야 합니다 (`Quicklight.zip` 도 받습니다). 초안(draft)과 사전 릴리스(pre-release)는 업데이트 대상에서 빠집니다.
 
 ### 서명 키
 

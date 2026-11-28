@@ -1,0 +1,22 @@
+{"id":"unit-001","cat":"unit","tier":"easy","q":"10km to mi","expect":{"kind":"calculator","titleHas":"6.21"}}
+{"id":"unit-002","cat":"unit","tier":"easy","q":"10km","expect":{"kind":"calculator","titleHas":"6.21"}}
+{"id":"unit-003","cat":"unit","tier":"easy","q":"1gb mb","expect":{"kind":"calculator","titleHas":"1024"}}
+{"id":"unit-004","cat":"unit","tier":"easy","q":"1 inch cm","expect":{"kind":"calculator","titleHas":"2.54"}}
+{"id":"unit-005","cat":"unit","tier":"easy","q":"5 lb kg","expect":{"kind":"calculator","titleHas":"2.26"}}
+{"id":"unit-006","cat":"unit","tier":"easy","q":"30c to f","expect":{"kind":"calculator","titleHas":"86"}}
+{"id":"unit-007","cat":"unit","tier":"normal","q":"100f to c","expect":{"kind":"calculator","titleHas":"37.7"}}
+{"id":"unit-008","cat":"unit","tier":"normal","q":"1평 m2","expect":{"kind":"calculator","titleHas":"3.30"}}
+{"id":"unit-009","cat":"unit","tier":"normal","q":"30평","expect":{"kind":"calculator","titleHas":"99.1"}}
+{"id":"unit-010","cat":"unit","tier":"normal","q":"60mph kmh","expect":{"kind":"calculator","titleHas":"96.5"}}
+{"id":"unit-011","cat":"unit","tier":"normal","q":"1 mile km","expect":{"kind":"calculator","titleHas":"1.609"}}
+{"id":"unit-012","cat":"unit","tier":"normal","q":"2tb gb","expect":{"kind":"calculator","titleHas":"2048"}}
+{"id":"unit-013","cat":"unit","tier":"normal","q":"180cm ft","expect":{"kind":"calculator","titleHas":"5.9"}}
+{"id":"unit-014","cat":"unit","tier":"normal","q":"500ml l","expect":{"kind":"calculator","titleHas":"0.5"}}
+{"id":"unit-015","cat":"unit","tier":"normal","q":"3시간 분","expect":{"kind":"calculator","titleHas":"180"}}
+{"id":"unit-016","cat":"unit","tier":"hard","q":"섭씨 25도 화씨","expect":{"kind":"calculator","titleHas":"77"}}
+{"id":"unit-017","cat":"unit","tier":"hard","q":"30도 화씨로","expect":{"kind":"calculator","titleHas":"86"}}
+{"id":"unit-018","cat":"unit","tier":"hard","q":"1마일은 몇 km","expect":{"kind":"calculator","titleHas":"1.609"}}
+{"id":"unit-019","cat":"unit","tier":"hard","q":"키 180cm 피트","expect":{"kind":"calculator","titleHas":"5.9"}}
+{"id":"unit-020","cat":"unit","tier":"hard","q":"2 cups ml","expect":{"kind":"calculator","titleHas":"473"}}
+{"id":"unit-021","cat":"unit","tier":"hard","q":"100 km/h to m/s","expect":{"kind":"calculator","titleHas":"27.7"}}
+{"id":"unit-022","cat":"unit","tier":"hard","q":"1 acre 평","expect":{"kind":"calculator","titleHas":"1224"}}

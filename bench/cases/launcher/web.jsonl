@@ -1,0 +1,16 @@
+{"id":"web-001","cat":"web","tier":"easy","q":"g 날씨","expect":{"kind":"web_search","titleHas":"날씨","subtitleHas":"키워드"}}
+{"id":"web-002","cat":"web","tier":"easy","q":"github.com","expect":{"kind":"url","titleHas":"github.com"}}
+{"id":"web-003","cat":"web","tier":"easy","q":"https://example.com/a?b=1","expect":{"kind":"url","titleHas":"example.com"}}
+{"id":"web-004","cat":"web","tier":"easy","q":"naver.com","expect":{"kind":"url","titleHas":"naver.com"}}
+{"id":"web-005","cat":"web","tier":"easy","q":"C:\\Win","expect":{"kind":"path","titleHas":"Windows"}}
+{"id":"web-006","cat":"web","tier":"easy","q":"C:\\Users","expect":{"kind":"path","titleHas":"Users"}}
+{"id":"web-007","cat":"web","tier":"normal","q":"www.youtube.com","expect":{"kind":"url","titleHas":"youtube"}}
+{"id":"web-008","cat":"web","tier":"normal","q":"C:\\Windows\\System32\\drivers\\etc","expect":{"kind":"path","titleHas":"etc"}}
+{"id":"web-009","cat":"web","tier":"normal","q":"C:\\Program Fi","expect":{"kind":"path","titleHas":"Program Files"}}
+{"id":"web-010","cat":"web","tier":"normal","q":"http://localhost:3000","expect":{"kind":"url","titleHas":"localhost"}}
+{"id":"web-011","cat":"web","tier":"normal","q":"docs.microsoft.com/ko-kr","expect":{"kind":"url","titleHas":"microsoft.com"}}
+{"id":"web-012","cat":"web","tier":"hard","q":"localhost:3000","expect":{"kind":"url","titleHas":"localhost"}}
+{"id":"web-013","cat":"web","tier":"hard","q":"192.168.0.1","expect":{"kind":"url","titleHas":"192.168.0.1"}}
+{"id":"web-014","cat":"web","tier":"hard","q":"%temp%","expect":{"kind":"path","titleAny":["temp","Temp"]}}
+{"id":"web-015","cat":"web","tier":"hard","q":"~\\Downloads","expect":{"kind":"path","titleAny":["Downloads","다운로드"]}}
+{"id":"web-016","cat":"web","tier":"hard","q":"구글에서 날씨","expect":{"kind":"web_search","titleHas":"날씨","subtitleHas":"google"}}

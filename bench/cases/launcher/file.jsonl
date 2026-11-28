@@ -1,0 +1,31 @@
+// bench\fixtures\files.json 의 대상 파일을, 비슷한 이름의 미끼 파일 1,500여 개 사이에서 찾음 (3위 안).
+{"id":"file-001","cat":"file","tier":"easy","q":"견적서_한빛상사_2026년11월","expect":{"kind":"file","titleHas":"견적서_한빛상사","rank":3}}
+{"id":"file-002","cat":"file","tier":"easy","q":"분기보고서_3분기_최종","expect":{"kind":"file","titleHas":"분기보고서_3분기_최종","rank":3}}
+{"id":"file-003","cat":"file","tier":"easy","q":"PaymentGatewayClient","expect":{"kind":"file","titleHas":"PaymentGatewayClient","rank":3}}
+{"id":"file-004","cat":"file","tier":"easy","q":"README_quickbench","expect":{"kind":"file","titleHas":"README_quickbench","rank":3}}
+{"id":"file-005","cat":"file","tier":"easy","q":"연차신청서","expect":{"kind":"file","titleHas":"연차신청서","rank":3}}
+{"id":"file-006","cat":"file","tier":"normal","q":"한빛상사 견적서","expect":{"kind":"file","titleHas":"견적서_한빛상사","rank":3}}
+{"id":"file-007","cat":"file","tier":"normal","q":"한빛상사","expect":{"kind":"file","titleHas":"견적서_한빛상사","rank":3}}
+{"id":"file-008","cat":"file","tier":"normal","q":"분기보고서 최종","expect":{"kind":"file","titleHas":"분기보고서_3분기_최종","rank":3}}
+{"id":"file-009","cat":"file","tier":"normal","q":"기획회의 회의록","expect":{"kind":"file","titleHas":"기획회의","rank":3}}
+{"id":"file-010","cat":"file","tier":"normal","q":"신규서비스","expect":{"kind":"file","titleHas":"신규서비스_제안발표","rank":3}}
+{"id":"file-011","cat":"file","tier":"normal","q":"여권사본","expect":{"kind":"file","titleHas":"여권사본","rank":3}}
+{"id":"file-012","cat":"file","tier":"normal","q":"가계부","expect":{"kind":"file","titleHas":"가계부_2026","rank":3}}
+{"id":"file-013","cat":"file","tier":"normal","q":"성산일출봉","expect":{"kind":"file","titleHas":"성산일출봉","rank":3}}
+{"id":"file-014","cat":"file","tier":"normal","q":"임대차계약서","expect":{"kind":"file","titleHas":"임대차계약서","rank":3}}
+{"id":"file-015","cat":"file","tier":"normal","q":"운영체제 과제2","expect":{"kind":"file","titleHas":"운영체제_과제2","rank":3}}
+{"id":"file-016","cat":"file","tier":"normal","q":"data structures hw3","expect":{"kind":"file","titleHas":"Data Structures HW3","rank":3}}
+{"id":"file-017","cat":"file","tier":"normal","q":"lofi study","expect":{"kind":"file","titleHas":"Lofi Study Mix","rank":3}}
+{"id":"file-018","cat":"file","tier":"normal","q":"돌잔치","expect":{"kind":"file","titleHas":"돌잔치_하이라이트","rank":3}}
+{"id":"file-019","cat":"file","tier":"normal","q":"ext:hwpx 연차","expect":{"kind":"file","titleHas":"연차신청서","rank":3}}
+{"id":"file-020","cat":"file","tier":"normal","q":"*.mp4 돌잔치","expect":{"kind":"file","titleHas":"돌잔치","rank":3}}
+{"id":"file-021","cat":"file","tier":"normal","q":"계약서 서명본","expect":{"kind":"file","titleHas":"임대차계약서_서명본","rank":3}}
+{"id":"file-022","cat":"file","tier":"hard","q":"3분기 보고서","expect":{"kind":"file","titleHas":"분기보고서_3분기_최종","rank":3}}
+{"id":"file-023","cat":"file","tier":"hard","q":"견적서 한빛상싸","expect":{"kind":"file","titleHas":"견적서_한빛상사","rank":3}}
+{"id":"file-024","cat":"file","tier":"hard","q":"ㅇㅊㅅㅊㅅ","expect":{"kind":"file","titleHas":"연차신청서","rank":3}}
+{"id":"file-025","cat":"file","tier":"hard","q":"dlaeockrPdirtj","expect":{"kind":"file","titleHas":"임대차계약서","rank":3}}
+{"id":"file-026","cat":"file","tier":"hard","q":"payment gateway","expect":{"kind":"file","titleHas":"PaymentGatewayClient","rank":3}}
+{"id":"file-027","cat":"file","tier":"hard","q":"제주도 여행 사진","expect":{"kind":"file","titleHas":"제주도여행","rank":3}}
+{"id":"file-028","cat":"file","tier":"hard","q":"기획회의 1120","expect":{"kind":"file","titleHas":"기획회의","rank":3}}
+{"id":"file-029","cat":"file","tier":"hard","q":"제안 발표","expect":{"kind":"file","titleHas":"신규서비스_제안발표","rank":3}}
+{"id":"file-030","cat":"file","tier":"hard","q":"datastructures","expect":{"kind":"file","titleHas":"Data Structures HW3","rank":3}}

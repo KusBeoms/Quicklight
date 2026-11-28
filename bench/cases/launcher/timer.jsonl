@@ -1,0 +1,13 @@
+// 시간만 쓰면 타이머 (런처 안에서만 확인: MCP 에는 타이머 행이 없음).
+{"id":"timer-001","cat":"timer","tier":"easy","q":"5분","expect":{"action":"Timer"}}
+{"id":"timer-002","cat":"timer","tier":"easy","q":"10분","expect":{"action":"Timer"}}
+{"id":"timer-003","cat":"timer","tier":"easy","q":"30초","expect":{"action":"Timer"}}
+{"id":"timer-004","cat":"timer","tier":"normal","q":"1시간 30분","expect":{"action":"Timer"}}
+{"id":"timer-005","cat":"timer","tier":"normal","q":"타이머 3분","expect":{"action":"Timer"}}
+{"id":"timer-006","cat":"timer","tier":"normal","q":"25분 타이머","expect":{"action":"Timer"}}
+{"id":"timer-007","cat":"timer","tier":"normal","q":"5 min","expect":{"action":"Timer"}}
+{"id":"timer-008","cat":"timer","tier":"hard","q":"라면 3분","expect":{"action":"Timer"}}
+{"id":"timer-009","cat":"timer","tier":"hard","q":"오후 3시 알림","expect":{"action":"Timer"}}
+{"id":"timer-010","cat":"timer","tier":"hard","q":"10분 뒤 회의","expect":{"action":"Timer"}}
+// 앱 이름이 먼저: 앱과 이름이 같으면 타이머가 1위면 안 됨
+{"id":"timer-011","cat":"timer","tier":"normal","q":"메모장","expect":{"kind":"app","titleHas":"메모장"}}

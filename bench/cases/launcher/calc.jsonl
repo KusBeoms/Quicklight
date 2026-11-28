@@ -1,0 +1,46 @@
+// 계산: 1위가 계산기여야 하고 값이 맞아야 함. Qutra 행(890점)보다 계산기(1000점)가 위라 "Qutra로 넘기지 않음"도 함께 확인.
+{"id":"calc-001","cat":"calc","tier":"easy","q":"12*7","expect":{"kind":"calculator","titleHas":"84"}}
+{"id":"calc-002","cat":"calc","tier":"easy","q":"1+2","expect":{"kind":"calculator","titleHas":"3"}}
+{"id":"calc-003","cat":"calc","tier":"easy","q":"100/4","expect":{"kind":"calculator","titleHas":"25"}}
+{"id":"calc-004","cat":"calc","tier":"easy","q":"7-10","expect":{"kind":"calculator","titleHas":"-3"}}
+{"id":"calc-005","cat":"calc","tier":"easy","q":"2^10","expect":{"kind":"calculator","titleHas":"1024"}}
+{"id":"calc-006","cat":"calc","tier":"easy","q":"1234*5678","expect":{"kind":"calculator","titleHas":"7006652"}}
+{"id":"calc-007","cat":"calc","tier":"easy","q":"sqrt(16)","expect":{"kind":"calculator","titleHas":"4"}}
+{"id":"calc-008","cat":"calc","tier":"easy","q":"20%","expect":{"kind":"calculator","titleHas":"0.2"}}
+{"id":"calc-009","cat":"calc","tier":"easy","q":"(1+2)*3","expect":{"kind":"calculator","titleHas":"9"}}
+{"id":"calc-010","cat":"calc","tier":"easy","q":"3.5*2","expect":{"kind":"calculator","titleHas":"7"}}
+{"id":"calc-011","cat":"calc","tier":"normal","q":"2+3*4","expect":{"kind":"calculator","titleHas":"14"}}
+{"id":"calc-012","cat":"calc","tier":"normal","q":"(1+2)^3","expect":{"kind":"calculator","titleHas":"27"}}
+{"id":"calc-013","cat":"calc","tier":"normal","q":"10%3","expect":{"kind":"calculator","titleHas":"1"}}
+{"id":"calc-014","cat":"calc","tier":"normal","q":"abs(-42)","expect":{"kind":"calculator","titleHas":"42"}}
+{"id":"calc-015","cat":"calc","tier":"normal","q":"round(3.14159)","expect":{"kind":"calculator","titleHas":"3"}}
+{"id":"calc-016","cat":"calc","tier":"normal","q":"pi*2","expect":{"kind":"calculator","titleHas":"6.28"}}
+{"id":"calc-017","cat":"calc","tier":"normal","q":"sin(0)","expect":{"kind":"calculator","titleHas":"0"}}
+{"id":"calc-018","cat":"calc","tier":"normal","q":"log(1000)","expect":{"kind":"calculator","titleHas":"3"}}
+{"id":"calc-019","cat":"calc","tier":"normal","q":"=5*5","expect":{"kind":"calculator","titleHas":"25"}}
+{"id":"calc-020","cat":"calc","tier":"normal","q":"12*7=","expect":{"kind":"calculator","titleHas":"84"}}
+{"id":"calc-021","cat":"calc","tier":"normal","q":"1,000*3","expect":{"kind":"calculator","titleHas":"3000"}}
+{"id":"calc-022","cat":"calc","tier":"normal","q":"0.1+0.2","expect":{"kind":"calculator","titleHas":"0.3"}}
+{"id":"calc-023","cat":"calc","tier":"normal","q":"1e6/8","expect":{"kind":"calculator","titleHas":"125000"}}
+{"id":"calc-024","cat":"calc","tier":"normal","q":"50000*0.15","expect":{"kind":"calculator","titleHas":"7500"}}
+{"id":"calc-025","cat":"calc","tier":"normal","q":"ceil(4.1)+floor(4.9)","expect":{"kind":"calculator","titleHas":"9"}}
+{"id":"calc-026","cat":"calc","tier":"normal","q":"12 * 7","expect":{"kind":"calculator","titleHas":"84"}}
+{"id":"calc-027","cat":"calc","tier":"normal","q":"3x4","expect":{"kind":"calculator","titleHas":"12"}}
+{"id":"calc-028","cat":"calc","tier":"normal","q":"8÷2","expect":{"kind":"calculator","titleHas":"4"}}
+{"id":"calc-029","cat":"calc","tier":"normal","q":"6×7","expect":{"kind":"calculator","titleHas":"42"}}
+{"id":"calc-030","cat":"calc","tier":"hard","q":"3+4는?","expect":{"kind":"calculator","titleHas":"7"}}
+{"id":"calc-031","cat":"calc","tier":"hard","q":"3 곱하기 4","expect":{"kind":"calculator","titleHas":"12"}}
+{"id":"calc-032","cat":"calc","tier":"hard","q":"100 나누기 8","expect":{"kind":"calculator","titleHas":"12.5"}}
+{"id":"calc-033","cat":"calc","tier":"hard","q":"5 더하기 3","expect":{"kind":"calculator","titleHas":"8"}}
+{"id":"calc-034","cat":"calc","tier":"hard","q":"10 빼기 4","expect":{"kind":"calculator","titleHas":"6"}}
+{"id":"calc-035","cat":"calc","tier":"hard","q":"12*7은 얼마야","expect":{"kind":"calculator","titleHas":"84"}}
+{"id":"calc-036","cat":"calc","tier":"hard","q":"삼백만 나누기 12","expect":{"kind":"calculator","titleHas":"250000"}}
+{"id":"calc-037","cat":"calc","tier":"hard","q":"5만 * 3","expect":{"kind":"calculator","titleHas":"150000"}}
+{"id":"calc-038","cat":"calc","tier":"hard","q":"200의 15%","expect":{"kind":"calculator","titleHas":"30"}}
+{"id":"calc-039","cat":"calc","tier":"hard","q":"30000원의 10%","expect":{"kind":"calculator","titleHas":"3000"}}
+{"id":"calc-040","cat":"calc","tier":"hard","q":"2의 10제곱","expect":{"kind":"calculator","titleHas":"1024"}}
+{"id":"calc-041","cat":"calc","tier":"hard","q":"루트 144","expect":{"kind":"calculator","titleHas":"12"}}
+{"id":"calc-042","cat":"calc","tier":"hard","q":"what is 15*4","expect":{"kind":"calculator","titleHas":"60"}}
+{"id":"calc-043","cat":"calc","tier":"hard","q":"0x1F","expect":{"kind":"calculator","titleHas":"31"}}
+{"id":"calc-044","cat":"calc","tier":"hard","q":"255 in hex","expect":{"kind":"calculator","titleHas":"ff"}}
+{"id":"calc-045","cat":"calc","tier":"hard","q":"5!","expect":{"kind":"calculator","titleHas":"120"}}

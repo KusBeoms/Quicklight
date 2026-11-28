@@ -1,0 +1,49 @@
+// Windows 기본 앱 (어느 PC에나 있음). rank: 그 안에 있으면 통과.
+{"id":"app-001","cat":"app","tier":"easy","q":"메모장","expect":{"kind":"app","titleAny":["메모장","notepad"]}}
+{"id":"app-002","cat":"app","tier":"easy","q":"계산기","expect":{"kind":"app","titleAny":["계산기","calculator"]}}
+{"id":"app-003","cat":"app","tier":"easy","q":"그림판","expect":{"kind":"app","titleAny":["그림판","paint"]}}
+{"id":"app-004","cat":"app","tier":"easy","q":"작업 관리자","expect":{"kind":"app","titleAny":["작업 관리자","task manager"]}}
+{"id":"app-005","cat":"app","tier":"easy","q":"제어판","expect":{"kind":["app","setting"],"titleAny":["제어판","control panel"]}}
+{"id":"app-006","cat":"app","tier":"easy","q":"명령 프롬프트","expect":{"kind":"app","titleAny":["명령 프롬프트","command prompt","cmd"]}}
+{"id":"app-007","cat":"app","tier":"easy","q":"파일 탐색기","expect":{"kind":"app","titleAny":["파일 탐색기","explorer"]}}
+{"id":"app-008","cat":"app","tier":"easy","q":"캡처 도구","expect":{"kind":"app","titleAny":["캡처 도구","snipping"]}}
+{"id":"app-009","cat":"app","tier":"easy","q":"레지스트리 편집기","expect":{"kind":"app","titleAny":["레지스트리 편집기","regedit","registry"]}}
+{"id":"app-010","cat":"app","tier":"easy","q":"Microsoft Edge","expect":{"kind":"app","titleHas":"edge"}}
+{"id":"app-011","cat":"app","tier":"easy","q":"notepad","expect":{"kind":"app","titleAny":["메모장","notepad"]}}
+{"id":"app-012","cat":"app","tier":"easy","q":"calculator","expect":{"kind":"app","titleAny":["계산기","calculator"]}}
+{"id":"app-013","cat":"app","tier":"easy","q":"cmd","expect":{"kind":"app","titleAny":["명령 프롬프트","command prompt","cmd"]}}
+{"id":"app-014","cat":"app","tier":"easy","q":"powershell","expect":{"kind":"app","titleHas":"powershell"}}
+{"id":"app-015","cat":"app","tier":"easy","q":"edge","expect":{"kind":"app","titleHas":"edge"}}
+{"id":"app-016","cat":"app","tier":"normal","q":"paint","expect":{"kind":"app","titleAny":["그림판","paint"]}}
+{"id":"app-017","cat":"app","tier":"normal","q":"task manager","expect":{"kind":"app","titleAny":["작업 관리자","task manager"]}}
+{"id":"app-018","cat":"app","tier":"normal","q":"control panel","expect":{"kind":["app","setting"],"titleAny":["제어판","control panel"]}}
+{"id":"app-019","cat":"app","tier":"normal","q":"snipping tool","expect":{"kind":"app","titleAny":["캡처 도구","snipping"]}}
+{"id":"app-020","cat":"app","tier":"normal","q":"regedit","expect":{"kind":"app","titleAny":["레지스트리 편집기","regedit","registry"]}}
+{"id":"app-021","cat":"app","tier":"normal","q":"explorer","expect":{"kind":"app","titleAny":["파일 탐색기","explorer"],"rank":3}}
+{"id":"app-022","cat":"app","tier":"normal","q":"ㅁㅁㅈ","expect":{"kind":"app","titleHas":"메모장"}}
+{"id":"app-023","cat":"app","tier":"normal","q":"ㄱㅅㄱ","expect":{"kind":"app","titleHas":"계산기"}}
+{"id":"app-024","cat":"app","tier":"normal","q":"ㄱㄹㅍ","expect":{"kind":"app","titleHas":"그림판"}}
+{"id":"app-025","cat":"app","tier":"normal","q":"ㅈㅇㄱㄹㅈ","expect":{"kind":"app","titleHas":"작업 관리자"}}
+{"id":"app-026","cat":"app","tier":"normal","q":"ㅈㅇㅍ","expect":{"kind":["app","setting"],"titleHas":"제어판","rank":3}}
+{"id":"app-027","cat":"app","tier":"normal","q":"ㅋㅊㄷㄱ","expect":{"kind":"app","titleHas":"캡처 도구"}}
+{"id":"app-028","cat":"app","tier":"normal","q":"작업 관","expect":{"kind":"app","titleHas":"작업 관리자"}}
+{"id":"app-029","cat":"app","tier":"normal","q":"탐색기","expect":{"kind":"app","titleHas":"탐색기"}}
+{"id":"app-030","cat":"app","tier":"normal","q":"캡처","expect":{"kind":"app","titleHas":"캡처","rank":3}}
+{"id":"app-031","cat":"app","tier":"normal","q":"레지스트리","expect":{"kind":"app","titleHas":"레지스트리"}}
+{"id":"app-032","cat":"app","tier":"normal","q":"프롬프트","expect":{"kind":"app","titleHas":"프롬프트","rank":3}}
+{"id":"app-033","cat":"app","tier":"normal","q":"작업관리자","expect":{"kind":"app","titleHas":"작업 관리자"}}
+{"id":"app-034","cat":"app","tier":"hard","q":"apahwkd","expect":{"kind":"app","titleHas":"메모장"}}
+{"id":"app-035","cat":"app","tier":"hard","q":"rPtksrl","expect":{"kind":"app","titleHas":"계산기"}}
+{"id":"app-036","cat":"app","tier":"hard","q":"rmflavks","expect":{"kind":"app","titleHas":"그림판"}}
+{"id":"app-037","cat":"app","tier":"hard","q":"wkrdjq rhksflwk","expect":{"kind":"app","titleHas":"작업 관리자"}}
+{"id":"app-038","cat":"app","tier":"hard","q":"ㅜㅐㅅㄷㅔㅁㅇ","expect":{"kind":"app","titleAny":["메모장","notepad"]}}
+{"id":"app-039","cat":"app","tier":"hard","q":"메모잔","expect":{"kind":"app","titleHas":"메모장"}}
+{"id":"app-040","cat":"app","tier":"hard","q":"계산긔","expect":{"kind":"app","titleHas":"계산기"}}
+{"id":"app-041","cat":"app","tier":"hard","q":"notpad","expect":{"kind":"app","titleAny":["메모장","notepad"]}}
+{"id":"app-042","cat":"app","tier":"hard","q":"calculater","expect":{"kind":"app","titleAny":["계산기","calculator"]}}
+{"id":"app-043","cat":"app","tier":"hard","q":"powershel","expect":{"kind":"app","titleHas":"powershell"}}
+{"id":"app-044","cat":"app","tier":"hard","q":"제어 판","expect":{"kind":["app","setting"],"titleHas":"제어판"}}
+{"id":"app-045","cat":"app","tier":"hard","q":"그림 그리는 앱","expect":{"kind":"app","titleHas":"그림판","rank":3}}
+{"id":"app-046","cat":"app","tier":"hard","q":"화면 캡처","expect":{"kind":"app","titleHas":"캡처 도구","rank":3}}
+{"id":"app-047","cat":"app","tier":"hard","q":"tjfwjd","expect":{"kind":["app","setting"],"titleHas":"설정","rank":3}}
+{"id":"app-048","cat":"app","tier":"hard","q":"ms paint","expect":{"kind":"app","titleAny":["그림판","paint"]}}

@@ -1,0 +1,32 @@
+{"id":"sys-001","cat":"system","tier":"easy","q":"블루투스 꺼","expect":{"kind":"command","titleHas":"블루투스 끄기"}}
+{"id":"sys-002","cat":"system","tier":"easy","q":"블루투스 켜","expect":{"kind":"command","titleHas":"블루투스 켜기"}}
+{"id":"sys-003","cat":"system","tier":"easy","q":"와이파이 꺼","expect":{"kind":"command","titleAny":["wi-fi 끄기","와이파이 끄기"]}}
+{"id":"sys-004","cat":"system","tier":"easy","q":"음소거","expect":{"kind":"command","titleHas":"음소거"}}
+{"id":"sys-005","cat":"system","tier":"easy","q":"볼륨 20","expect":{"kind":"command","titleHas":"20"}}
+{"id":"sys-006","cat":"system","tier":"easy","q":"다크 모드","expect":{"kind":"command","titleHas":"다크 모드"}}
+{"id":"sys-007","cat":"system","tier":"easy","q":"잠금","expect":{"kind":"command","titleHas":"잠금"}}
+{"id":"sys-008","cat":"system","tier":"easy","q":"휴지통 비우기","expect":{"kind":"command","titleHas":"휴지통"}}
+{"id":"sys-009","cat":"system","tier":"easy","q":"디스플레이 설정","expect":{"kind":"setting","titleHas":"디스플레이"}}
+{"id":"sys-010","cat":"system","tier":"easy","q":"블루투스 설정","expect":{"kind":"setting","titleHas":"블루투스","rank":2}}
+{"id":"sys-011","cat":"system","tier":"normal","q":"bluetooth off","expect":{"kind":"command","titleHas":"블루투스 끄기"}}
+{"id":"sys-012","cat":"system","tier":"normal","q":"wifi off","expect":{"kind":"command","titleAny":["wi-fi 끄기","와이파이 끄기"]}}
+{"id":"sys-013","cat":"system","tier":"normal","q":"mute","expect":{"kind":"command","titleHas":"음소거"}}
+{"id":"sys-014","cat":"system","tier":"normal","q":"라이트 모드","expect":{"kind":"command","titleHas":"라이트 모드"}}
+{"id":"sys-015","cat":"system","tier":"normal","q":"dark mode","expect":{"kind":"command","titleHas":"다크 모드"}}
+{"id":"sys-016","cat":"system","tier":"normal","q":"볼륨 50%","expect":{"kind":"command","titleHas":"50"}}
+{"id":"sys-017","cat":"system","tier":"normal","q":"절전","expect":{"kind":"command","titleHas":"절전"}}
+{"id":"sys-018","cat":"system","tier":"normal","q":"재부팅","expect":{"kind":"command","titleHas":"다시 시작"}}
+{"id":"sys-019","cat":"system","tier":"normal","q":"기본 앱","expect":{"kind":"setting","titleHas":"기본 앱"}}
+{"id":"sys-020","cat":"system","tier":"normal","q":"windows 업데이트","expect":{"kind":"setting","titleHas":"업데이트","rank":2}}
+{"id":"sys-021","cat":"system","tier":"normal","q":"소리 설정","expect":{"kind":"setting","titleHas":"소리"}}
+{"id":"sys-022","cat":"system","tier":"normal","q":"프린터","expect":{"kind":"setting","titleHas":"프린터","rank":2}}
+{"id":"sys-023","cat":"system","tier":"normal","q":"배경 화면","expect":{"kind":"setting","titleHas":"배경","rank":2}}
+{"id":"sys-024","cat":"system","tier":"normal","q":"lock","expect":{"kind":"command","titleHas":"잠금","rank":2}}
+{"id":"sys-025","cat":"system","tier":"hard","q":"볼륨 올려","expect":{"kind":"command","titleHas":"볼륨"}}
+{"id":"sys-026","cat":"system","tier":"hard","q":"소리 좀 줄여","expect":{"kind":"command","titleHas":"볼륨"}}
+{"id":"sys-027","cat":"system","tier":"hard","q":"화면 밝기 50","expect":{"kind":"command","titleHas":"밝기"}}
+{"id":"sys-028","cat":"system","tier":"hard","q":"블투 꺼","expect":{"kind":"command","titleHas":"블루투스 끄기"}}
+{"id":"sys-029","cat":"system","tier":"hard","q":"인터넷 끊어","expect":{"kind":"command","titleAny":["wi-fi 끄기","와이파이 끄기"]}}
+{"id":"sys-030","cat":"system","tier":"hard","q":"시작 프로그램","expect":{"kind":"setting","titleHas":"시작","rank":2}}
+{"id":"sys-031","cat":"system","tier":"hard","q":"마우스 속도","expect":{"kind":"setting","titleHas":"마우스","rank":2}}
+{"id":"sys-032","cat":"system","tier":"hard","q":"방해 금지","expect":{"kind":["setting","command"],"titleAny":["방해 금지","알림"],"rank":2}}

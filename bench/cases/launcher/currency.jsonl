@@ -1,0 +1,12 @@
+// 환율은 저장된 캐시만 씀 (실행 중 네트워크 없음): 값이 아니라 결과 종류와 통화 기호를 봄.
+{"id":"cur-001","cat":"currency","tier":"easy","q":"100달러","expect":{"kind":"currency","titleHas":"₩"}}
+{"id":"cur-002","cat":"currency","tier":"easy","q":"100 usd","expect":{"kind":"currency","titleHas":"₩"}}
+{"id":"cur-003","cat":"currency","tier":"easy","q":"50 eur to usd","expect":{"kind":"currency","titleHas":"$"}}
+{"id":"cur-004","cat":"currency","tier":"normal","q":"1만엔","expect":{"kind":"currency","titleHas":"₩"}}
+{"id":"cur-005","cat":"currency","tier":"normal","q":"10000원 달러","expect":{"kind":"currency","titleHas":"$"}}
+{"id":"cur-006","cat":"currency","tier":"normal","q":"20 유로","expect":{"kind":"currency","titleHas":"₩"}}
+{"id":"cur-007","cat":"currency","tier":"normal","q":"1000 jpy krw","expect":{"kind":"currency","titleHas":"₩"}}
+{"id":"cur-008","cat":"currency","tier":"hard","q":"삼만원 달러로","expect":{"kind":"currency","titleHas":"$"}}
+{"id":"cur-009","cat":"currency","tier":"hard","q":"100 위안","expect":{"kind":"currency","titleHas":"₩"}}
+{"id":"cur-010","cat":"currency","tier":"hard","q":"5파운드","expect":{"kind":"currency","titleHas":"₩","rank":2}}
+{"id":"cur-011","cat":"currency","tier":"hard","q":"$100","expect":{"kind":"currency","titleHas":"₩"}}

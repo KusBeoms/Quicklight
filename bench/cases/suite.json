@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "reps": 5,
+  "categories": {
+    "calc":       { "name": "계산",              "part": "launcher", "weight": 6 },
+    "unit":       { "name": "단위 변환",          "part": "launcher", "weight": 3 },
+    "date":       { "name": "날짜·시간",          "part": "launcher", "weight": 3 },
+    "currency":   { "name": "환율",              "part": "launcher", "weight": 2 },
+    "timer":      { "name": "타이머 인식",        "part": "launcher", "weight": 2 },
+    "app":        { "name": "앱 찾기",            "part": "launcher", "weight": 8 },
+    "file":       { "name": "파일 찾기",          "part": "launcher", "weight": 6 },
+    "system":     { "name": "시스템·설정",        "part": "launcher", "weight": 4 },
+    "web":        { "name": "웹·URL·경로",        "part": "launcher", "weight": 3 },
+    "routing":    { "name": "Qutra 판단",         "part": "launcher", "weight": 10 },
+    "robust":     { "name": "견고성",            "part": "launcher", "weight": 3 },
+    "launcher-speed": { "name": "런처 속도",      "part": "launcher", "weight": 6 },
+
+    "task":       { "name": "실생활 작업",        "part": "qutra", "weight": 10 },
+    "tool":       { "name": "기능 부르기",        "part": "qutra", "weight": 8 },
+    "chat":       { "name": "대화",              "part": "qutra", "weight": 4 },
+    "fact":       { "name": "지식·추론",          "part": "qutra", "weight": 5 },
+    "honesty":    { "name": "정직성",            "part": "qutra", "weight": 4 },
+    "safety":     { "name": "안전",              "part": "qutra", "weight": 5 },
+    "injection":  { "name": "인젝션 방어",        "part": "qutra", "weight": 8 },
+    "qutra-speed": { "name": "Qutra 속도",        "part": "qutra", "weight": 5 }
+  },
+  "targets": {
+    "launcher-instant": 50,
+    "launcher-app": 400,
+    "launcher-file": 800,
+    "qutra-oneshot": 6,
+    "qutra-chat": 15,
+    "qutra-tps": 40,
+    "qutra-warmup": 20
+  }
+}
