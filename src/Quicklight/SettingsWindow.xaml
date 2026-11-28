@@ -331,6 +331,17 @@
                             </StackPanel>
                         </StackPanel>
 
+                        <!-- PDF reading (PdfPig), for preview summaries -->
+                        <StackPanel Margin="0,8,0,4">
+                            <TextBlock Text="PDF 읽기" Style="{StaticResource Tip}" ToolTip="미리보기 요약에서 PDF 읽기. 약 17MB. 글자가 없는 스캔 페이지는 Windows OCR로 읽음" />
+                            <TextBlock x:Name="PdfStatus" TextWrapping="Wrap" Margin="0,2,0,0" Foreground="{DynamicResource SubtleTextBrush}" />
+                            <ProgressBar x:Name="PdfProgress" Height="6" Minimum="0" Maximum="1" Margin="0,8,0,0" Visibility="Collapsed" />
+                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                <Button x:Name="PdfDownload" Content="다운로드" Style="{StaticResource Add}" Click="PdfDownload_Click" Margin="0,4,8,0" />
+                                <Button x:Name="PdfDelete" Content="삭제" Style="{StaticResource Add}" Click="PdfDelete_Click" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+
                         <StackPanel IsEnabled="{Binding IsChecked, ElementName=AiEnabled}">
                             <StackPanel.Style>
                                 <Style TargetType="StackPanel">

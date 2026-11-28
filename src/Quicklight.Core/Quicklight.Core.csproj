@@ -12,5 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <!-- PdfPig (Apache-2.0): compiled against, not shipped. PdfText downloads the same version from settings. -->
+    <PackageReference Include="PdfPig" Version="0.1.16" ExcludeAssets="runtime" PrivateAssets="all" />
   </ItemGroup>
 </Project>

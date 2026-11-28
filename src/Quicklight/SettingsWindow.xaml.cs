@@ -41,9 +41,10 @@ public partial class SettingsWindow : Window
         _apply = apply;
         InitializeComponent();
         SourceInitialized += (_, _) => NativeUi.SetDarkTitleBar(new WindowInteropHelper(this).Handle, Theme.IsDark);
-        Closed += (_, _) => { _open = null; _aiCts?.Cancel(); _controlCts?.Cancel(); };
+        Closed += (_, _) => { _open = null; _aiCts?.Cancel(); _controlCts?.Cancel(); _pdfCts?.Cancel(); };
         RefreshAi();
         RefreshControl();
+        RefreshPdf();
         Fill(s);
         Snippets.ItemsSource = _snippets = new(s.Snippets.Select(p => new Row { A = p.Key, B = p.Value }));
         Commands.ItemsSource = _commands = new(s.Commands.Select(c => new Row
@@ -219,6 +220,59 @@ public partial class SettingsWindow : Window
         RefreshControl();
     }
 
+    // ---------- PDF reading (PdfPig) ----------
+
+    CancellationTokenSource? _pdfCts;
+
+    void RefreshPdf()
+    {
+        bool busy = _pdfCts is not null, installed = PdfText.IsInstalled;
+        PdfStatus.Text = installed ? $"설치됨 · {PdfText.Version}" : "미설치";
+        PdfDownload.Visibility = installed && !busy ? Visibility.Collapsed : Visibility.Visible;
+        PdfDownload.Content = busy ? "취소" : "다운로드";
+        PdfDelete.Visibility = installed && !busy ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    async void PdfDownload_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pdfCts is { } running) { running.Cancel(); return; }
+        var cts = _pdfCts = new CancellationTokenSource();
+        PdfProgress.Visibility = Visibility.Visible;
+        PdfProgress.IsIndeterminate = true;
+        RefreshPdf();
+        var progress = new Progress<(string Label, double? Fraction)>(p =>
+        {
+            PdfStatus.Text = p.Label;
+            PdfProgress.IsIndeterminate = p.Fraction is null;
+            if (p.Fraction is { } f) PdfProgress.Value = f;
+        });
+        try { await PdfText.InstallAsync(progress, cts.Token); }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Log.Error("pdf download failed", ex);
+            MessageBox.Show(this, "내려받기 실패\n" + ex.Message, "Quicklight", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            _pdfCts = null;
+            PdfProgress.Visibility = Visibility.Collapsed;
+            RefreshPdf();
+        }
+    }
+
+    void PdfDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(this, "PDF 읽기를 삭제할까요?", "Quicklight", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
+        try { PdfText.Delete(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error("pdf delete failed", ex);
+            MessageBox.Show(this, "삭제 실패\n" + ex.Message, "Quicklight", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        RefreshPdf();
+    }
+
     async void AiDownload_Click(object sender, RoutedEventArgs e)
     {
         if (_aiCts is { } running) { running.Cancel(); return; }
@@ -257,6 +311,8 @@ public partial class SettingsWindow : Window
             MessageBox.Show(this, "삭제 실패: 사용 중입니다. 잠시 뒤 다시 시도하세요.\n" + ex.Message, "Quicklight", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         RefreshAi();
+        RefreshControl(); // the model's folder holds computer control and PDF reading too
+        RefreshPdf();
     }
 
     void Cancel_Click(object sender, RoutedEventArgs e) => Close();

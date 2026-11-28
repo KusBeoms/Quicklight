@@ -6,14 +6,16 @@ using Quicklight.Core.Models;
 
 namespace Quicklight.Core.Ai;
 
-/// <summary>The text of a file for a summary: plain text, Office Open XML (docx, pptx, xlsx) and HWPX (zipped XML). Null when there is none.</summary>
+/// <summary>The text of a file for a summary: plain text, Office Open XML (docx, pptx, xlsx), HWPX (zipped XML) and, once PDF reading is installed, PDF. Null when there is none.</summary>
 public static class DocumentText
 {
     public const int MaxChars = 12000;
     static readonly string[] Zipped = [".docx", ".pptx", ".xlsx", ".hwpx"];
 
     public static bool Supports(string path) =>
-        FileTypeLabel.IsPlainText(path) || Array.IndexOf(Zipped, Path.GetExtension(path).ToLowerInvariant()) >= 0;
+        FileTypeLabel.IsPlainText(path) || Array.IndexOf(Zipped, Path.GetExtension(path).ToLowerInvariant()) >= 0 || IsPdf(path) && PdfText.IsInstalled;
+
+    static bool IsPdf(string path) => Path.GetExtension(path).Equals(".pdf", StringComparison.OrdinalIgnoreCase);
 
     public static string? Extract(string path)
     {
@@ -21,6 +23,7 @@ public static class DocumentText
         {
             if (FileTypeLabel.IsPlainText(path)) return Usable(ReadText(path));
             if (!Supports(path)) return null;
+            if (IsPdf(path)) return Usable(PdfText.Extract(path, MaxChars) ?? "");
             string ext = Path.GetExtension(path).ToLowerInvariant();
             using var zip = ZipFile.OpenRead(path);
             var sb = new StringBuilder();

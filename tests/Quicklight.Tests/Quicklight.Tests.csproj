@@ -17,6 +17,8 @@
     <!-- Pinned above the vulnerable 4.3.0 versions the test packages pull in transitively. -->
     <PackageReference Include="System.Net.Http" Version="4.3.4" />
     <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
+    <!-- Quicklight.Core only compiles against it (PdfText downloads it); the tests load it directly. -->
+    <PackageReference Include="PdfPig" Version="0.1.16" />
   </ItemGroup>
 
   <ItemGroup>
