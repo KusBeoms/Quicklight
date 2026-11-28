@@ -11,17 +11,17 @@ public static class ClipboardActions
 
     /// <param name="Id">Stable id, the row's target.</param>
     /// <param name="Label">Korean name, the row's title.</param>
-    /// <param name="Prompt">System prompt: the model answers with the result only.</param>
-    public sealed record Item(string Id, string Label, string Prompt);
+    /// <param name="Task">The prompt; the clipboard text goes in as data and the model answers with the result only.</param>
+    public sealed record Item(string Id, string Label, Prompts.OneShot Task);
 
     public static readonly IReadOnlyList<Item> All =
     [
-        new("summary", "요약", "Summarize the user's text in Korean in a few short lines. Output only the summary, no preface."),
-        new("polish", "다듬기", "Polish the user's text: fix grammar, spelling and awkward phrasing, keep its language and meaning. Output only the polished text."),
-        new("en", "영어로 번역", "Translate the user's text into English. Output only the translation, no explanations, no quotes."),
-        new("ko", "한국어로 번역", "Translate the user's text into Korean. Output only the translation, no explanations, no quotes."),
-        new("csv", "표를 CSV로", "Convert the user's text (a table or list) into CSV with comma separators. Output only the CSV."),
-        new("json", "JSON 정리", "Reformat the user's text as valid, indented JSON. Output only the JSON."),
+        new("summary", "요약", Prompts.ClipSummary),
+        new("polish", "다듬기", Prompts.Polish),
+        new("en", "영어로 번역", Prompts.Translate("English")),
+        new("ko", "한국어로 번역", Prompts.Translate("Korean")),
+        new("csv", "표를 CSV로", Prompts.Csv),
+        new("json", "JSON 정리", Prompts.Json),
     ];
 
     public static Item? Find(string id) => All.FirstOrDefault(a => a.Id == id);

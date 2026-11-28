@@ -10,7 +10,11 @@ public class ClipboardActionsTests
     {
         Assert.Equal(6, ClipboardActions.All.Count);
         foreach (var a in ClipboardActions.All)
-            Assert.Contains("Output only", a.Prompt);
+        {
+            Assert.Contains("Output only", a.Task.System);
+            Assert.Contains("<data>", a.Task.System);
+            Assert.EndsWith(a.Task.Reminder, a.Task.User("x"));
+        }
         Assert.Equal("영어로 번역", ClipboardActions.Find("en")!.Label);
         Assert.Null(ClipboardActions.Find("nope"));
     }
