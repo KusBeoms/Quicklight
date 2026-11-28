@@ -89,6 +89,8 @@ public sealed class SystemProvider : IResultProvider
     public Task<IReadOnlyList<SearchResult>> QueryAsync(QueryContext query, CancellationToken ct)
     {
         var results = new List<SearchResult>();
+        if (!query.IsAlternate && Shell.QuickControls.Parse(query.Text) is var (id, title, sub))
+            results.Add(new SearchResult { Title = title, Subtitle = sub, Kind = ResultKind.Command, Target = id, Action = ActionType.System, Score = Scores.Date });
         foreach (var it in Items)
         {
             double m = FuzzyMatcher.Score(query.Text, it.Title);

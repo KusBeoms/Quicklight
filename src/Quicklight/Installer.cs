@@ -108,6 +108,9 @@ public static class Installer
         Autostart.Sync(false);
         try { Core.Integration.ContextMenuRegistration.Unregister(); } catch (Exception ex) { Log.Error("context menu cleanup failed", ex); }
         try { Registry.CurrentUser.DeleteSubKey(KeyPath, false); } catch (Exception ex) { Log.Error("uninstall registration cleanup failed", ex); }
+        // Timer toasts: the snooze protocol points at the exe being deleted.
+        try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\quicklight-snooze", false); Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\AppUserModelId\Quicklight.Launcher", false); }
+        catch (Exception ex) { Log.Error("timer registration cleanup failed", ex); }
         try
         {
             using var p = Process.Start(new ProcessStartInfo(Self, "--uninstall-elevated") { UseShellExecute = true, Verb = "runas" });

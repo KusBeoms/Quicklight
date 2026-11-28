@@ -95,6 +95,7 @@ public partial class App : Application
 
         _tray = new TrayIcon(_settings, show: () => _window.ShowLauncher(), openSettings: OpenSettings, reload: ReloadSettings, exit: () => Shutdown(),
             installEverything: () => _ = SetUpEverythingAsync(userAsked: true), openAi: () => _ai.ShowLast());
+        Quicklight.Core.Providers.TimerService.Init(_tray.Notify);
         SyncExplorerMenu();
         Autostart.Sync(_settings.LaunchAtStartup);
 

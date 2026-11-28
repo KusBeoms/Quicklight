@@ -43,6 +43,8 @@ public enum ActionType
     Terminal,
     /// <summary>Ask the AI assistant the question in <see cref="SearchResult.Target"/> (handled by the launcher).</summary>
     AskAi,
+    /// <summary>Schedule a timer/reminder (see TimerProvider); handled in SearchEngine.Execute.</summary>
+    Timer,
 }
 
 public sealed class SearchResult

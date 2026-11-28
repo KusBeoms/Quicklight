@@ -13,6 +13,7 @@ public static class Program
         // The one elevated step of the bundled Everything setup (started through UAC by the launcher).
         if (args.Contains("--install-everything")) return Quicklight.Core.Everything.EverythingBootstrap.InstallElevated();
 
+        if (args.Length == 2 && args[0] == "--snooze") return Quicklight.Core.Providers.TimerService.Snooze(args[1]);
         if (args.Contains("--install")) return Installer.InstallElevated();
         if (args.Contains("--uninstall")) return Installer.Uninstall();
         if (args.Contains("--uninstall-elevated")) return Installer.UninstallElevated();

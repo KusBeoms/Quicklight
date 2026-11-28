@@ -67,6 +67,7 @@ public static class ShellLauncher
             case "restart": Shutdown("/r /t 0"); break;
             case "shutdown": Shutdown("/s /t 0"); break;
             case "recyclebin": SHEmptyRecycleBin(IntPtr.Zero, null, 0); break;
+            case var c when c.StartsWith(QuickControls.Prefix): QuickControls.Run(c); break;
             default: throw new ArgumentException("Unknown system command: " + id);
         }
     }

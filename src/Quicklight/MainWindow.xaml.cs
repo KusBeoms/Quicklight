@@ -74,7 +74,8 @@ public partial class MainWindow : Window
         ((CollectionViewSource)Resources["GroupedResults"]).Source = _items;
         ((CollectionViewSource)Resources["GroupedApps"]).Source = _apps;
         PreviewParts.ItemsSource = _parts;
-        Deactivated += (_, _) => { if (!Pinned && !_handingOffToAi) HideLauncher(); };
+        Deactivated += (_, _) => { if (!Pinned && !_handingOffToAi && !_dragging) HideLauncher(); };
+        foreach (var list in new[] { Results, AppGrid, PreviewParts }) list.PreviewMouseMove += List_PreviewMouseMove;
         // The window reaches the bottom of the screen so the panel can grow inside it; a click beside the panel closes it.
         MouseDown += (_, e) => { if (!Pinned && e.OriginalSource is Visual v && !BarPanel.IsAncestorOf(v) && !ListPanel.IsAncestorOf(v) && v != ScopeBar && !ScopeBar.IsAncestorOf(v)) HideLauncher(); };
         Query.SelectionChanged += (_, _) => SyncCaret();
@@ -519,7 +520,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>What a search starts from: everything, or one scope picked with Ctrl+1 / 2 / 4 or a chip under the search box.</summary>
-    enum Scope { None, Apps, Files, Clipboard }
+    enum Scope { None, Apps, Files, Recent, Clipboard }
 
     Scope _scope;
 
@@ -565,6 +566,7 @@ public partial class MainWindow : Window
     {
         Scope.Apps => "앱 — 글자를 눌러 이동",
         Scope.Files => "파일과 폴더 검색",
+        Scope.Recent => "최근 파일과 폴더 — 입력해서 거르기",
         Scope.Clipboard => "클립보드 기록 — 입력해서 거르기",
         _ => _settings.AiEnabled && Core.Ai.AiModel.IsAvailable ? "묻거나 검색" : "Quicklight 검색",
     };
@@ -575,6 +577,7 @@ public partial class MainWindow : Window
         ScopeBar.Visibility = BarGrid.IsMouseOver || ScopeBar.IsMouseOver || _scope != Scope.None ? Visibility.Visible : Visibility.Collapsed;
         ChipApps.IsChecked = _scope == Scope.Apps;
         ChipFiles.IsChecked = _scope == Scope.Files;
+        ChipRecent.IsChecked = _scope == Scope.Recent;
         ChipClipboard.IsChecked = _scope == Scope.Clipboard;
     }
 
@@ -598,13 +601,19 @@ public partial class MainWindow : Window
         var cts = _cts = new CancellationTokenSource();
         var token = cts.Token;
         _lastQuery = text.Trim();
-        if (_lastQuery.Length == 0 && _scope != Scope.Clipboard)
+        if (_lastQuery.Length == 0 && _scope is not (Scope.Clipboard or Scope.Recent))
         {
             Render([], keepSelection: false);
             return;
         }
         try
         {
+            if (_scope == Scope.Recent)
+            {
+                var recent = await _engine.RecentAsync(_lastQuery, token);
+                if (!token.IsCancellationRequested) Render(recent, keepSelection: false);
+                return;
+            }
             if (_scope == Scope.Clipboard)
             {
                 var entries = await _clipboard.ListAsync(_lastQuery, token);
@@ -616,6 +625,22 @@ public partial class MainWindow : Window
             var fast = await SearchOffUiAsync(text, FileStage.None, expandSystemFolders, expandSystemFiles, kinds, token);
             if (fast is null) return;
             Render(fast, keepSelection: false);
+            if (_settings.AiEnabled && Core.Ai.AiModel.IsAvailable && Ai is { } ai && Core.Ai.TranslateParser.Parse(_lastQuery) is { } tr)
+            {
+                SearchResult Card(string title, string sub, string target) => new()
+                {
+                    Title = title, Subtitle = sub, Kind = ResultKind.Calculator, Target = target, Action = target.Length > 0 ? ActionType.Copy : ActionType.None, Score = Scores.Calculator,
+                };
+                var sub = $"{tr.Label}로 번역 · Qutra";
+                Render([Card("번역 중…", sub, ""), .. fast], keepSelection: false);
+                await Task.Delay(600, token); // translate only after typing pauses
+                string? done = null;
+                try { done = await ai.Session.TranslateAsync(tr, token); }
+                catch (Exception ex) when (ex is not OperationCanceledException) { Log.Error("translate failed", ex); }
+                if (token.IsCancellationRequested) return;
+                Render(done is null ? fast : [Card(done, sub, done), .. fast], keepSelection: false);
+                return; // no file passes for a translation
+            }
             // Later passes bring files, and network paths (too slow to check on every keystroke); skip them when there are neither.
             if ((_lastQuery.Length < 2 || !_settings.FileSearch) && !PathProvider.IsNetworkQuery(_lastQuery)) return;
 
@@ -874,11 +899,12 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
-        // Ctrl+1 apps, Ctrl+2 files, Ctrl+4 clipboard: the scope, or back to the plain search when it is already on. Ctrl+3 is free.
+        // Ctrl+1 apps, Ctrl+2 files, Ctrl+3 recent, Ctrl+4 clipboard: the scope, or back to the plain search when it is already on.
         if (mods == ModifierKeys.Control && e.Key switch
             {
                 Key.D1 or Key.NumPad1 => Scope.Apps,
                 Key.D2 or Key.NumPad2 => Scope.Files,
+                Key.D3 or Key.NumPad3 => Scope.Recent,
                 Key.D4 or Key.NumPad4 => Scope.Clipboard,
                 _ => (Scope?)null,
             } is { } wanted)
@@ -944,6 +970,10 @@ public partial class MainWindow : Window
                 e.Handled = true; break;
             case Key.System when e.SystemKey == Key.Enter: // Alt+Enter
                 if (Selected is { } toInspect) ShowProperties(toInspect);
+                e.Handled = true; break;
+            case Key.Delete when Selected is { Result: { Action: ActionType.Timer, Target: var timerTarget } } && timerTarget.StartsWith("cancel|"):
+                Quicklight.Core.Providers.TimerService.Cancel(timerTarget[7..]);
+                _ = RunSearchAsync(Query.Text);
                 e.Handled = true; break;
             case Key.Delete when Selected is { Result.Kind: ResultKind.Clipboard } entry:
                 if (_clipboard.Delete(entry.Result.Target)) _ = RunSearchAsync(Query.Text);
@@ -1040,12 +1070,48 @@ public partial class MainWindow : Window
     {
         // Keep keyboard focus in the search box; clicking selects, double-clicking opens.
         var list = (ListBox)sender;
-        if (HitItem(list, e).Item is not { } item) return;
+        _dragItem = HitItem(list, e).Item;
+        _dragStart = e.GetPosition(null);
+        if (_dragItem is not { } item) return;
         e.Handled = true;
         list.SelectedItem = item;
         UpdateFooter();
         if (e.ClickCount >= 2) Execute(item);
         Query.Focus();
+    }
+
+    // Drag a file, folder, app or clipboard text row out of the launcher into another window.
+    ResultItem? _dragItem;
+    Point _dragStart;
+    bool _dragging;
+
+    void List_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed) { _dragItem = null; return; }
+        if (_dragItem is null || _dragging) return;
+        var d = e.GetPosition(null) - _dragStart;
+        if (Math.Abs(d.X) <= SystemParameters.MinimumHorizontalDragDistance && Math.Abs(d.Y) <= SystemParameters.MinimumVerticalDragDistance) return;
+        var item = _dragItem;
+        _dragItem = null;
+        var data = DragDataFor(item);
+        if (data is null) return;
+        _dragging = true;
+        Opacity = 0.4; // the drop target stays visible under the launcher
+        DragDropEffects effect;
+        try { effect = DragDrop.DoDragDrop((DependencyObject)sender, data, DragDropEffects.Copy | DragDropEffects.Link); }
+        finally { Opacity = 1; _dragging = false; }
+        if (effect != DragDropEffects.None) HideLauncher();
+        else { Activate(); Query.Focus(); } // a cancelled drag left another window active; take focus back so clicking away still closes
+    }
+
+    DataObject? DragDataFor(ResultItem item)
+    {
+        var r = item.Result;
+        if (r.Kind == ResultKind.Clipboard)
+            return _clipboard.Text(r.Target) is { } text ? new DataObject(DataFormats.UnicodeText, text) : null;
+        string? path = r.Kind is ResultKind.File or ResultKind.Folder or ResultKind.Path ? r.Target : r.App?.FilePath;
+        if (path is null || !(System.IO.File.Exists(path) || System.IO.Directory.Exists(path))) return null;
+        return new DataObject(DataFormats.FileDrop, new[] { path });
     }
 
     int _wheel;

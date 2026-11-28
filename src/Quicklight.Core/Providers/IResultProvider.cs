@@ -30,6 +30,7 @@ public static class Scores
     public const double Calculator = 1000;
     public const double Unit = 970;
     public const double Date = 960;
+    public const double Timer = 150; // below an app named like the whole query (100 + match), above loose matches
     public const double Currency = 950;
     public const double KeywordSearch = 190; // above files and loose app matches, below an app named like the whole query ("g hub")
     public const double Snippet = 700;

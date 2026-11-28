@@ -66,6 +66,7 @@ public sealed class SearchEngine : IDisposable
         if (includeWindows) // the launcher; MCP clients get neither the window switcher nor a row that opens the launcher's AI chat
         {
             _providers.Add(new WindowProvider());
+            _providers.Add(new TimerProvider());
             _providers.Add(new Ai.AskAiProvider(() => settings.AiEnabled && Ai.AiModel.IsAvailable));
         }
         if (everything is not null) _providers.Add(new EverythingProvider(everything, settings));
@@ -89,6 +90,23 @@ public sealed class SearchEngine : IDisposable
     /// <param name="files">File search depth. The launcher paints <see cref="FileStage.None"/> first, then Prefix, then Full.</param>
     /// <param name="expandSystemFolders">Show system (hidden/system-attribute) folders instead of the "시스템 폴더" placeholder.</param>
     /// <param name="expandSystemFiles">Show system (hidden/system-attribute) files instead of the "시스템 파일" placeholder.</param>
+    /// <summary>The "최근" scope: the Recent folder's shortcuts, else Everything's last 7 days of files; the text filters them.</summary>
+    public async Task<IReadOnlyList<SearchResult>> RecentAsync(string text, CancellationToken ct = default)
+    {
+        bool Excluded(string p) => _settings.ExcludedPathsInEffect.Any(d => p.Contains(d, StringComparison.OrdinalIgnoreCase));
+        var items = RecentFiles.FromShortcuts(RecentFiles.Folder, lnk => Native.Shell.ReadShortcut(lnk).Target, Excluded);
+        if (items.Count == 0 && _everything is not null && _settings.FileSearch && EverythingClient.IsAvailable)
+        {
+            try
+            {
+                var found = await _everything.SearchAsync(new EverythingQuery("file: dm:last7days", 60, EverythingSort.DateModifiedDescending), ct);
+                items = RecentFiles.FromItems(found, Excluded);
+            }
+            catch (Exception ex) when (ex is EverythingUnavailableException or TimeoutException) { }
+        }
+        return RecentFiles.Filter(items, text);
+    }
+
     public async Task<IReadOnlyList<SearchResult>> SearchAsync(string text, int? maxResults = null, CancellationToken ct = default,
         ISet<ResultKind>? kinds = null, FileStage files = FileStage.Full, bool expandSystemFolders = false, bool expandSystemFiles = false)
     {
@@ -214,7 +232,7 @@ public sealed class SearchEngine : IDisposable
     /// <summary>Remembers the choice so queries like this one rank it higher next time. The query itself is not kept.</summary>
     public void RecordSelection(string query, SearchResult result)
     {
-        if (IsTransient(result.Kind)) return;
+        if (IsTransient(result.Kind) || result.Action == ActionType.Timer) return;
         _usage.Record(result.Key, query.Trim().Length, Strength(query, result));
     }
 
@@ -250,6 +268,9 @@ public sealed class SearchEngine : IDisposable
                 break;
             case ActionType.Copy or ActionType.Paste or ActionType.Terminal:
                 throw new InvalidOperationException("Copy and paste results are handled by the caller.");
+            case ActionType.Timer:
+                if (!r.Target.StartsWith("cancel|")) TimerService.Start(r.Target);
+                break;
             case ActionType.None:
                 break;
             case ActionType.Update:

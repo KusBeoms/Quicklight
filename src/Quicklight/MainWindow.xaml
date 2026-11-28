@@ -369,6 +369,12 @@
                         <TextBlock Text="Ctrl+2" FontSize="11.5" Opacity="0.55" VerticalAlignment="Center" Margin="8,1,0,0" />
                     </StackPanel>
                 </ToggleButton>
+                <ToggleButton x:Name="ChipRecent" Tag="Recent" Style="{StaticResource ChipStyle}" Click="Chip_Click" AutomationProperties.Name="최근">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="최근" />
+                        <TextBlock Text="Ctrl+3" FontSize="11.5" Opacity="0.55" VerticalAlignment="Center" Margin="8,1,0,0" />
+                    </StackPanel>
+                </ToggleButton>
                 <ToggleButton x:Name="ChipClipboard" Tag="Clipboard" Style="{StaticResource ChipStyle}" Click="Chip_Click" AutomationProperties.Name="클립보드">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="클립보드" />

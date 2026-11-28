@@ -93,6 +93,19 @@ public sealed partial class AiSession : IDisposable
         }
     }
 
+    /// <summary>One-shot translation: no conversation, no history. Null when the model gave nothing.</summary>
+    public Task<string?> TranslateAsync(TranslateRequest r, CancellationToken ct) => Task.Run(() => RunAsync(async () =>
+    {
+        var messages = new JsonArray
+        {
+            new JsonObject { ["role"] = "system", ["content"] = $"You are a translator. Translate the user's text into {r.Language}. Output only the translation, no explanations, no quotes." },
+            new JsonObject { ["role"] = "user", ["content"] = r.Text },
+        };
+        var message = await ChatAsync(messages, null, ct);
+        var text = Think().Replace(message["content"]?.GetValue<string>() ?? "", "").Trim();
+        return text.Length == 0 ? null : text;
+    }, ct), CancellationToken.None);
+
     static string ErrorText(Exception ex) => ex switch
     {
         HttpRequestException => "AI 서버에 연결하지 못했습니다.",
