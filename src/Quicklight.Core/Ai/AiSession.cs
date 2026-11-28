@@ -94,12 +94,17 @@ public sealed partial class AiSession : IDisposable
     }
 
     /// <summary>One-shot translation: no conversation, no history. Null when the model gave nothing.</summary>
-    public Task<string?> TranslateAsync(TranslateRequest r, CancellationToken ct) => Task.Run(() => RunAsync(async () =>
+    public Task<string?> TranslateAsync(TranslateRequest r, CancellationToken ct) =>
+        CompleteAsync($"You are a translator. Translate the user's text into {r.Language}. Output only the translation, no explanations, no quotes.", r.Text, ct);
+
+    /// <summary>One-shot completion for launcher features (translation, query rewriting, summaries): no conversation, no history,
+    /// no tools, thinking off. Shares the single-request gate with questions. Null when the model gave nothing.</summary>
+    public Task<string?> CompleteAsync(string system, string user, CancellationToken ct) => Task.Run(() => RunAsync(async () =>
     {
         var messages = new JsonArray
         {
-            new JsonObject { ["role"] = "system", ["content"] = $"You are a translator. Translate the user's text into {r.Language}. Output only the translation, no explanations, no quotes." },
-            new JsonObject { ["role"] = "user", ["content"] = r.Text },
+            new JsonObject { ["role"] = "system", ["content"] = system },
+            new JsonObject { ["role"] = "user", ["content"] = user },
         };
         var message = await ChatAsync(messages, null, ct);
         var text = Think().Replace(message["content"]?.GetValue<string>() ?? "", "").Trim();
