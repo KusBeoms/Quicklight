@@ -45,6 +45,8 @@ public enum ActionType
     AskAi,
     /// <summary>Schedule a timer/reminder (see TimerProvider); handled in SearchEngine.Execute.</summary>
     Timer,
+    /// <summary>Have the AI turn the description in <see cref="SearchResult.Target"/> into an Everything query (handled by the launcher).</summary>
+    AiFileSearch,
 }
 
 public sealed class SearchResult

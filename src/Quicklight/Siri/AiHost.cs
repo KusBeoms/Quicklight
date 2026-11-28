@@ -52,6 +52,8 @@ public sealed class AiHost : IConsent, IDisposable
         {
             new McpToolSource(new McpServer(_toolEngine, everything, new McpServer.Options(AllowOpen: true))),
             new ScreenTools(() => Context),
+            new LauncherTools(ConfirmAsync),
+            new FileOrganizerTools(this),
         };
         // Computer control is its own switch (settings); reading is automatic, every change asks first through this host.
         _control = new KillSwitchTools(new AgentDesktopTools(), messageWindow, () => settings.ComputerControl, Cancel);

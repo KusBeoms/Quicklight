@@ -54,6 +54,7 @@ public static class QuickControls
                 break;
             case "mute": var m = Endpoint(); m.GetMute(out bool muted); m.SetMute(!muted, Guid.Empty); break;
             case "unmute": Endpoint().SetMute(false, Guid.Empty); break;
+            case "mute_on": Endpoint().SetMute(true, Guid.Empty); break; // Qutra: "mute" means mute, not toggle
             case "dark" or "light":
                 using (var k = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
                 {
